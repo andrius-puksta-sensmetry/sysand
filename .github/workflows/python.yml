@@ -16,10 +16,6 @@ on:
 permissions:
   contents: read
 
-defaults:
-  run:
-    working-directory: bindings/py
-
 jobs:
   linux:
     runs-on: ${{ matrix.platform.runner }}
@@ -38,19 +34,21 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --features vendored_tls
+          working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
           before-script-linux: |
-            /bin/bash ../../.github/scripts/install-linux-dependencies.sh
+            /bin/bash .github/scripts/install-linux-dependencies.sh
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist -i python3.13t --features vendored_tls
+          working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
           before-script-linux: |
-            /bin/bash ../../.github/scripts/install-linux-dependencies.sh
+            /bin/bash .github/scripts/install-linux-dependencies.sh
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -61,13 +59,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: pwd
-        run: pwd && ls -a
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
           args: --out dist
+          working-directory: bindings/py
       - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
@@ -99,3 +96,4 @@ jobs:
         with:
           command: upload
           args: --non-interactive -r testpypi --skip-existing wheels-*/*
+          working-directory: bindings/py
