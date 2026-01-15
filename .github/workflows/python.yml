@@ -10,7 +10,8 @@ on:
     branches: [ "ap/refactor-ci" ]
   pull_request:
     branches: [ "ap/refactor-ci" ]
-  tags: ["*"]
+  tags:
+      - '*'
   workflow_dispatch:
 
 permissions:
