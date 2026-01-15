@@ -60,6 +60,8 @@ jobs:
   sdist:
     runs-on: ubuntu-latest
     steps:
+      - name: pwd
+        run: pwd
       - uses: actions/checkout@v6
       - name: Build sdist
         uses: PyO3/maturin-action@v1
