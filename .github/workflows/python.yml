@@ -8,10 +8,9 @@ name: Publish to TestPyPI
 on:
   push:
     branches: [ "ap/refactor-ci" ]
+    tags: ["*"]
   pull_request:
     branches: [ "ap/refactor-ci" ]
-  tags:
-      - '*'
   workflow_dispatch:
 
 permissions:
