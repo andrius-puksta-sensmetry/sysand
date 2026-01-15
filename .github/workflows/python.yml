@@ -33,22 +33,22 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --features vendored_tls
-          working-directory: bindings/py
+          args: --release -o dist -m bindings/py -F vendored_tls
+          # working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
           before-script-linux: |
-            /bin/bash ../../.github/scripts/install-linux-dependencies.sh
+            /bin/bash .github/scripts/install-linux-dependencies.sh
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist -i python3.13t --features vendored_tls
-          working-directory: bindings/py
+          args: --release --out dist -i python3.13t -m bindings/py --features vendored_tls
+          # working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
           before-script-linux: |
-            /bin/bash ../../.github/scripts/install-linux-dependencies.sh
+            /bin/bash .github/scripts/install-linux-dependencies.sh
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
