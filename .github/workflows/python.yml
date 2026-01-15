@@ -37,7 +37,7 @@ jobs:
           args: --release -o dist -m bindings/py/Cargo.toml -F vendored_tls
           # working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          rust-toolchain: manual
+          rust-toolchain: ""
           manylinux: auto
           before-script-linux: |
             /bin/bash .github/scripts/install-linux-dependencies.sh
@@ -48,7 +48,7 @@ jobs:
           args: --release --out dist -i python3.13t -m bindings/py/Cargo.toml --features vendored_tls
           # working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          rust-toolchain: manual
+          rust-toolchain: ""
           manylinux: auto
           before-script-linux: |
             /bin/bash .github/scripts/install-linux-dependencies.sh
