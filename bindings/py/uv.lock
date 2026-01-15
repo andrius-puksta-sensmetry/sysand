@@ -486,7 +486,7 @@ wheels = [
 ]
 
 [[package]]
-name = "sysand"
+name = "sysand-test"
 source = { editable = "." }
 
 [package.dev-dependencies]
