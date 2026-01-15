@@ -16,9 +16,9 @@ on:
 permissions:
   contents: read
 
-# defaults:
-#   run:
-#     working-directory: bindings/py
+defaults:
+  run:
+    working-directory: bindings/py
 
 jobs:
   linux:
@@ -60,9 +60,9 @@ jobs:
   sdist:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
       - name: pwd
         run: pwd && ls -a
-      - uses: actions/checkout@v6
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
