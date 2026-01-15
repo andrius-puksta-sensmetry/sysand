@@ -3,7 +3,8 @@ requires = ["maturin>=1,<2"]
 build-backend = "maturin"
 
 [project]
-name = "sysand"
+name = "sysand-test"
+description = "A package manager for SysML v2 and KerML"
 license = "MIT OR Apache-2.0"
 dynamic = ["version"]
 requires-python = ">= 3.8"
@@ -13,11 +14,22 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Rust"
 ]
+# TODO: create a proper readme and/or docs to document what is available
+# in bindings
+# Also note that sysand cli is installed as well by this package
+maintainers = [
+    { name = "Sensmetry", email = "opensource@sensmetry.com" }
+]
+# TODO: maybe also include "_sysand_core; private"?
+# https://packaging.python.org/en/latest/specifications/pyproject-toml/#import-names
+import-names = ["sysand"]
 
-[tool.maturin]
-python-source = "python"
-features = ["pyo3/extension-module"]
-module-name = "sysand._sysand_core"
+[project.urls]
+documentation = "https://docs.sysand.org"
+homepage = "https://beta.sysand.org"
+source = "https://github.com/sensmetry/sysand"
+issues = "https://github.com/sensmetry/sysand/issues"
+
 
 [dependency-groups]
 dev = [
@@ -29,3 +41,8 @@ linters = [
     "mypy>=1.14.1",
     "ruff>=0.12.11",
 ]
+
+[tool.maturin]
+python-source = "python"
+features = ["pyo3/extension-module"]
+module-name = "sysand._sysand_core"
