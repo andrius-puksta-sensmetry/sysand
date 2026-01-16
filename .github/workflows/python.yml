@@ -67,7 +67,6 @@ jobs:
           command: sdist
           args: --out dist
           working-directory: bindings/py
-          before-script-linux: pwd && ls -a
       - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
@@ -99,4 +98,3 @@ jobs:
         with:
           command: upload
           args: --non-interactive -r testpypi --skip-existing wheels-*/*
-          working-directory: bindings/py
