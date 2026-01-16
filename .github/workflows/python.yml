@@ -103,4 +103,4 @@ jobs:
         run: |
           echo 'index = [{ name = "testpypi", url = "https://test.pypi.org/simple/", publish-url = "https://test.pypi.org/legacy/", default = true }]' > uv.toml
           pip install uv
-          uv publish -v --trusted-publishing always wheels-*/*
+          uv publish -v --index testpypi --trusted-publishing always wheels-*/*
