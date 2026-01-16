@@ -65,13 +65,13 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
-          args: --out dist -m bindings/py/Cargo.toml
-          # working-directory: bindings/py
+          args: --out dist
+          working-directory: bindings/py
       - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
           name: wheels-sdist
-          path: dist
+          path: bindings/py/dist
 
   release:
     name: Release to testpypi
