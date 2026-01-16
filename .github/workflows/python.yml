@@ -107,4 +107,4 @@ jobs:
           default = true
           EOF > uv.toml
           pip install uv
-          uv publish --trusted-publishing always wheels-*/*
+          uv publish -v --trusted-publishing always wheels-*/*
