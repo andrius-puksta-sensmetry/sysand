@@ -3372,7 +3372,7 @@ dependencies = [
 
 [[package]]
 name = "sysand"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anstream",
  "anyhow",
@@ -3404,7 +3404,7 @@ dependencies = [
 
 [[package]]
 name = "sysand-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anstyle",
  "assert_cmd",
@@ -3446,7 +3446,7 @@ dependencies = [
 
 [[package]]
 name = "sysand-java"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "indexmap",
  "jni",
@@ -3461,7 +3461,7 @@ dependencies = [
 
 [[package]]
 name = "sysand-js"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
@@ -3481,7 +3481,7 @@ dependencies = [
 
 [[package]]
 name = "sysand-py"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "predicates",
  "pyo3",
