@@ -37,7 +37,7 @@ jobs:
           # working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           # rust-toolchain: 1.85
-          manylinux: auto
+          manylinux: 2_28
           before-script-linux: |
             /bin/bash .github/scripts/install-linux-dependencies.sh
       - name: Build free-threaded wheels
@@ -48,7 +48,7 @@ jobs:
           # working-directory: bindings/py
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           # rust-toolchain: 1.85
-          manylinux: auto
+          manylinux: 2_28
           before-script-linux: |
             /bin/bash .github/scripts/install-linux-dependencies.sh
       - name: Upload wheels
@@ -92,9 +92,13 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'wheels-*/*'
+      # - name: Publish to PyPI
+      #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      #   uses: PyO3/maturin-action@v1
+      #   with:
+      #     command: upload
+      #     args: --non-interactive --repository=testpypi --skip-existing wheels-*/*
       - name: Publish to PyPI
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        uses: PyO3/maturin-action@v1
-        with:
-          command: upload
-          args: --non-interactive --repository=testpypi --skip-existing wheels-*/*
+        run: pip install uv
+        run: uv publish --index testpypi --trusted-publishing always wheels-*/*
