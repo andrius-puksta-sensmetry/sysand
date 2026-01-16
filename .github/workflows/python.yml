@@ -101,6 +101,6 @@ jobs:
       - name: Publish to PyPI
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
-          echo [[index]]\nurl = "https://test.pypi.org/simple"\ndefault = true > uv.toml
+          echo "[[index]]\nurl = "https://test.pypi.org/simple"\ndefault = true" > uv.toml
           pip install uv
           uv publish --trusted-publishing always wheels-*/*
