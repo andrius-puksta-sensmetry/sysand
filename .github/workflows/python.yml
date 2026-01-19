@@ -69,8 +69,9 @@ jobs:
         with:
           command: sdist -m bindings/py/Cargo.toml
           args: --out dist
-      - name: Upload sdist
+      - name: ls
         run: ls -a
+      - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
           name: wheels-sdist
