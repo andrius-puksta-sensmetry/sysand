@@ -47,13 +47,13 @@ jobs:
           args: --release -o dist -m bindings/py/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: 2_28
-      - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist -i python3.13t -m bindings/py/Cargo.toml
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: 2_28
+      # - name: Build free-threaded wheels
+      #   uses: PyO3/maturin-action@v1
+      #   with:
+      #     target: ${{ matrix.platform.target }}
+      #     args: --release --out dist -i python3.13t -m bindings/py/Cargo.toml
+      #     sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      #     manylinux: 2_28
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -69,8 +69,6 @@ jobs:
         with:
           command: sdist -m bindings/py/Cargo.toml
           args: --out dist
-      - name: ls
-        run: ls -a
       - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
@@ -94,9 +92,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
       - name: Generate artifact attestation
+        id: attest
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # 3.1.0
         with:
           subject-path: 'wheels-*/*'
+
+      - name: Prepare attestations for uv
+        run: |
+          # The action creates one bundle for all files in dist/
+          # uv expects a separate .publish.attestation file for each artifact
+          for file in wheels-*/*; do
+            cp "${{ steps.attest.outputs.bundle-path }}" "$file.publish.attestation"
+          done          
       - name: Publish to PyPI
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
         run: |

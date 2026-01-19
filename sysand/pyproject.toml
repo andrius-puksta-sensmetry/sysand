@@ -3,29 +3,20 @@ requires = ["maturin>=1,<2"]
 build-backend = "maturin"
 
 [project]
-name = "sysand-test"
+name = "sysand-cli"
 description = "A package manager for SysML v2 and KerML"
 license = "MIT OR Apache-2.0"
 dynamic = ["version"]
-requires-python = ">= 3.8"
+requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "Programming Language :: Python",
     "Programming Language :: Rust"
 ]
 # TODO: create a proper readme and/or docs to document what is available
-# in bindings
-# Also note that sysand cli is installed as well by this package
 readme = "README.md"
 maintainers = [
     { name = "Sensmetry", email = "opensource@sensmetry.com" }
-]
-# TODO: maybe also include "_sysand_core; private"?
-# https://packaging.python.org/en/latest/specifications/pyproject-toml/#import-names
-import-names = ["sysand"]
-dependencies = [
-    "sysand-cli==0.0.6",
 ]
 
 [project.urls]
@@ -38,19 +29,8 @@ issues = "https://github.com/sensmetry/sysand/issues"
 [dependency-groups]
 dev = [
     "maturin>=1,<2",
-    "pytest>=8.3.5",
-    "pytest-httpserver>=1.1.1",
-]
-linters = [
-    "mypy>=1.14.1",
-    "ruff>=0.12.11",
 ]
 
 [tool.maturin]
-python-source = "python"
-features = ["pyo3/extension-module"]
-module-name = "sysand._sysand_core"
 strip = true
-
-[tool.uv.sources]
-sysand-cli = { path = "../../sysand", editable = true }
+bindings = "bin"
