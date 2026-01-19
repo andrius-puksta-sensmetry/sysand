@@ -70,10 +70,11 @@ jobs:
           command: sdist -m bindings/py/Cargo.toml
           args: --out dist
       - name: Upload sdist
+        run: ls -a
         uses: actions/upload-artifact@v5
         with:
           name: wheels-sdist
-          path: bindings/py/dist
+          path: dist
 
   release:
     name: Release to testpypi
