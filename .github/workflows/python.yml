@@ -95,7 +95,6 @@ jobs:
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # 3.1.0
         with:
           subject-path: 'wheels-*/*'
-        run: ls -a && ls -a wheels-*/*
       - name: Publish to PyPI
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
         run: |
