@@ -47,3 +47,5 @@ linters = [
 python-source = "python"
 features = ["pyo3/extension-module"]
 module-name = "sysand._sysand_core"
+strip = true
+# bindings = "bin"
