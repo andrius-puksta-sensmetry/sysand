@@ -3,7 +3,7 @@
 #
 #    maturin generate-ci github --pytest --manifest-path bindings/py/Cargo.toml
 #
-name: Publish to TestPyPI
+name: Build/test/publish python packages
 
 on:
   push:
@@ -79,7 +79,7 @@ jobs:
           args: --release --out dist -i python3 -m sysand/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Fix CLI wheel compatibility
-        run: python3 sysand/scripts/universal_wheel.py
+        run: python3 sysand/scripts/universal_wheel.py dist/sysand_cli*
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -141,7 +141,7 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2 # TODO: don't use default cross-compilation images for arm runner
       - name: Fix CLI wheel compatibility
-        run: ./sysand/scripts/universal_wheel.py
+        run: ./sysand/scripts/universal_wheel.py dist/sysand_cli*
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -215,7 +215,7 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: manylinux2014
       - name: Fix CLI wheel compatibility
-        run: ./sysand/scripts/universal_wheel.py
+        run: ./sysand/scripts/universal_wheel.py dist/sysand_cli*
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -291,7 +291,7 @@ jobs:
           args: --release --out dist -i python3 -m bindings/py/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Fix CLI wheel compatibility
-        run: ./sysand/scripts/universal_wheel.py
+        run: ./sysand/scripts/universal_wheel.py dist/sysand_cli*
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
