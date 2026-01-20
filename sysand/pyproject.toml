@@ -28,3 +28,4 @@ issues = "https://github.com/sensmetry/sysand/issues"
 [tool.maturin]
 bindings = "bin"
 strip = true
+# compatibility = "off"
