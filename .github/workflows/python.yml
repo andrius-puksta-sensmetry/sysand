@@ -13,14 +13,14 @@ on:
       - 'bindings/py/**'
       - 'core/**'
       - Cargo.toml
-      - .github
+      - '.github/**'
   pull_request:
     branches: [ "ap/refactor-ci" ] # TODO: change to "main"
     paths: # TODO: is this exhaustive?
       - 'bindings/py/**'
       - 'core/**'
       - Cargo.toml
-      - .github
+      - '.github/**'
   workflow_dispatch:
 
 permissions:
