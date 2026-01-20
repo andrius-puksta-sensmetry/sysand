@@ -270,8 +270,8 @@ jobs:
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
-          command: sdist -m bindings/py/Cargo.toml
-          args: --out dist
+          command: sdist
+          args: --out dist -m bindings/py/Cargo.toml
       - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
