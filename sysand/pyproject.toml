@@ -25,12 +25,6 @@ homepage = "https://beta.sysand.org"
 source = "https://github.com/sensmetry/sysand"
 issues = "https://github.com/sensmetry/sysand/issues"
 
-
-[dependency-groups]
-dev = [
-    "maturin>=1,<2",
-]
-
 [tool.maturin]
-strip = true
 bindings = "bin"
+strip = true

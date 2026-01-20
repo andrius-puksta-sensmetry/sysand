@@ -53,6 +53,13 @@ jobs:
           - version: "3.13t"
             label: free-threaded
             args_suffix: " -i python3.13t"
+        exclude:
+          # Free-threaded python does not work on windows arm currently
+          # https://github.com/actions/setup-python/issues/1267
+          - platform:
+              - runner: windows-11-arm
+            python:
+              - version: "3.13t"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -125,7 +132,7 @@ jobs:
           name: wheels-musllinux-${{ matrix.platform.target }}
           path: dist
       - name: pytest (native)
-        if: ${{ matrix.platform.native }}        
+        if: ${{ matrix.platform.native }}
         uses: addnab/docker-run-action@v3
         with:
           image: ${{ matrix.platform.target == 'x86' && 'i386/alpine:latest' || 'alpine:latest' }}
@@ -136,7 +143,7 @@ jobs:
             export PATH=$PATH:$HOME/.local/bin
             /bin/bash .github/scripts/run-pytest.sh
       - name: pytest (emulated)
-        if: ${{ !matrix.platform.native }}        
+        if: ${{ !matrix.platform.native }}
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.platform.target }}
@@ -148,7 +155,7 @@ jobs:
             curl -LsSf https://astral.sh/uv/install.sh | sh
             export PATH=$PATH:$HOME/.local/bin
             /bin/bash .github/scripts/run-pytest.sh
-  
+
   linux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -304,7 +311,7 @@ jobs:
           # uv expects a separate .publish.attestation file for each artifact
           for file in wheels-*/*; do
             cp "${{ steps.attest.outputs.bundle-path }}" "$file.publish.attestation"
-          done          
+          done
       - name: Publish to PyPI
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
         run: |
