@@ -13,7 +13,7 @@ homepage.workspace = true
 
 [features]
 default = ["std"]
-std = ["log/std", "wasm-bindgen/std", "thiserror/std", "typed-path/std", "url/std", "futures/std"]
+std = ["log/std", "wasm-bindgen?/std", "thiserror/std", "typed-path/std", "url/std", "futures/std"]
 # Whether we should be more lenient when validating data in cases where the
 # KerML specification is vague.
 lenient_checks = []
@@ -36,7 +36,7 @@ indexmap = { version = "2.12.1", default-features = false, features = ["serde"] 
 # icu_normalizer = { version = "2.0.0", default-features = false, features = ["compiled_data"] }
 log = { version = "0.4.29", default-features = false }
 pubgrub = { version = "0.3.0", default-features = false }
-partialzip = { version = "5.0.0", default-features = false, optional = true }
+# partialzip = { version = "5.0.0", default-features = false, optional = true }
 pyo3 = { version = "0.27.2", default-features = false, features = ["macros", "chrono", "indexmap"], optional = true }
 reqwest-middleware = { version = "0.5.0" }
 semver = { version = "1.0.27", features = ["serde"] }
