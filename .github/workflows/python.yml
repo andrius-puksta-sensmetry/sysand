@@ -264,7 +264,7 @@ jobs:
           /bin/bash .github/scripts/run-pytest.sh
 
   sdist:
-    runs-on: ubuntu-slim # TODO: check if this takes <20s
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - name: Build sdist
@@ -281,7 +281,7 @@ jobs:
   release:
     name: Release to testpypi
     environment: testpypi
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # TODO: maybe use ubuntu-slim here?
     if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
     needs: [linux, musllinux, macos, windows, sdist]
     permissions:
