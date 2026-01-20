@@ -159,7 +159,7 @@ jobs:
             export PATH=$PATH:$HOME/.local/bin
             /bin/bash .github/scripts/run-pytest.sh
       - name: pytest (emulated)
-        if: "!matrix.platform.native"
+        if: ${{ !matrix.platform.native }}
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.platform.target }}
@@ -232,7 +232,7 @@ jobs:
         if: matrix.platform.native && matrix.platform.target != 'x86'
         run: /bin/bash .github/scripts/run-pytest.sh
       - name: pytest (emulated)
-        if: "!matrix.platform.native"
+        if: ${{ !matrix.platform.native }}
         uses: uraimo/run-on-arch-action@v3
         with:
           arch: ${{ matrix.platform.target }}
