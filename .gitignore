@@ -6,4 +6,3 @@ sysand-py/python/sysand/_sysand_core.abi3.so
 .vscode/
 native-bindings
 version.txt
-uv.lock
