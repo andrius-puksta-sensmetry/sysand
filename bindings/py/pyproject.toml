@@ -22,9 +22,8 @@ classifiers = [
     "Intended Audience :: Developers",
     "Topic :: Scientific/Engineering",
 ]
-# TODO: create a proper readme and/or docs to document what is available
-# in bindings
-# Also note that sysand cli is installed as well by this package
+# TODO: create a proper readme and/or docs to document
+# what is available in bindings
 readme = "README.md"
 maintainers = [
     { name = "Sensmetry", email = "opensource@sensmetry.com" }
