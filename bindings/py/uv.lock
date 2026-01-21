@@ -612,15 +612,8 @@ wheels = [
 ]
 
 [[package]]
-name = "sysand-cli"
-source = { editable = "../../sysand" }
-
-[[package]]
 name = "sysand-test"
 source = { editable = "." }
-dependencies = [
-    { name = "sysand-cli" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -638,7 +631,6 @@ linters = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "sysand-cli", editable = "../../sysand" }]
 
 [package.metadata.requires-dev]
 dev = [

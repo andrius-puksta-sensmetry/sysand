@@ -11,11 +11,6 @@ repository.workspace = true
 documentation.workspace = true
 homepage.workspace = true
 
-# Explicit declaration for maturin
-[[bin]]
-name = "sysand"
-path = "src/main.rs"
-
 [features]
 default = ["std"]
 std = ["anyhow/std", "clap/std", "fluent-uri/std", "log/std", "toml/std", "typed-path/std"]

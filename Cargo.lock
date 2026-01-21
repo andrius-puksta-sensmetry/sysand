@@ -3461,6 +3461,7 @@ dependencies = [
  "reqwest",
  "reqwest-middleware",
  "semver",
+ "sysand",
  "sysand-core",
  "tempfile",
  "tokio",
