@@ -137,7 +137,7 @@ jobs:
           image: ${{ matrix.platform.target == 'x86' && 'i386/alpine:latest' || 'alpine:latest' }}
           options: -v ${{ github.workspace }}:/io -w /io
           run: |
-            apk add curl bash
+            apk add curl bash python3
             curl -LsSf https://astral.sh/uv/install.sh | sh
             export PATH=$PATH:$HOME/.local/bin
             /bin/bash .github/scripts/run-pytest.sh
