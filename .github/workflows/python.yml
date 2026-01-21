@@ -89,10 +89,16 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.platform.target }}-${{ matrix.python.label }}
           path: dist
-      - name: Run Rust tests for Python bindings
+      - name: Run Rust tests for Python bindings # TODO: maybe specify bash here?
         run: |
           cd bindings/py
           cargo test --package sysand-py --verbose --no-default-features --target ${{ matrix.platform.rust_target }}
+      - name: Retrieve CLI wheel to satisfy deps
+        if: matrix.python.version != strategy.matrix.python[0].version
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # 7.0.0
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}-${{ matrix.python[0].label }}
+          path: dist
       - name: Install uv
         uses: astral-sh/setup-uv@v7
       - name: pytest
@@ -336,7 +342,7 @@ jobs:
       # Used to generate artifact attestation
       attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # 7.0.0
       - name: Generate artifact attestation
         id: attest
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # 3.1.0

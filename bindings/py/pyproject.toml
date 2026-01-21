@@ -24,6 +24,8 @@ maintainers = [
 # TODO: maybe also include "_sysand_core; private"?
 # https://packaging.python.org/en/latest/specifications/pyproject-toml/#import-names
 import-names = ["sysand"]
+# It would be nice to ship both bindings and CLI as a single package, but
+# maturin can't do this: https://github.com/PyO3/maturin/issues/368
 dependencies = [
     "sysand-cli==0.0.6",
 ]
