@@ -48,7 +48,7 @@ jobs:
         # TODO: whys is python set up this way here? Maybe restructure same as linux?
         python:
           - version: "3.13"
-            label: default
+            label: "default"
             args_suffix: ""
           - version: "3.13t"
             label: free-threaded
@@ -74,14 +74,14 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Build CLI wheels
         # CLI wheels are independent of python version
-        if: matrix.python.version == strategy.matrix.python[0].version
+        if: ${{ matrix.python.label == "default" }}
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.rust_target }}
-          args: --release --out dist -i python3 -m sysand/Cargo.toml
+          args: --release --out dist -m sysand/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Fix CLI wheel compatibility
-        if: matrix.python.version == strategy.matrix.python[0].version
+        if: ${{ matrix.python.label == "default" }}
         shell: bash
         run: python3 sysand/scripts/universal_wheel.py dist/sysand_cli*
       - name: Upload wheels
@@ -94,10 +94,10 @@ jobs:
           cd bindings/py
           cargo test --package sysand-py --verbose --no-default-features --target ${{ matrix.platform.rust_target }}
       - name: Retrieve CLI wheel to satisfy deps
-        if: matrix.python.version != strategy.matrix.python[0].version
+        if: ${{ matrix.python.label != "default" }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # 7.0.0
         with:
-          name: wheels-windows-${{ matrix.platform.target }}-${{ matrix.python[0].label }}
+          name: wheels-windows-${{ matrix.platform.target }}-default
           path: dist
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -140,14 +140,14 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist -m bindings/py/Cargo.toml -i python3.13t -i python3.14t
+          args: --release --out dist -m bindings/py/Cargo.toml -i python3.13t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
       - name: Build CLI wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist -i python3 -m sysand/Cargo.toml
+          args: --release --out dist -m sysand/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2 # TODO: don't use default cross-compilation images for arm runner
       - name: Fix CLI wheel compatibility
@@ -158,7 +158,7 @@ jobs:
           name: wheels-musllinux-${{ matrix.platform.target }}
           path: dist
       - name: pytest (native)
-        if: matrix.platform.native
+        if: ${{ matrix.platform.native }}
         uses: addnab/docker-run-action@v3
         with:
           image: ${{ matrix.platform.target == 'x86' && 'i386/alpine:latest' || 'alpine:latest' }}
@@ -214,14 +214,14 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist -i python3.13t -i python3.14t -m bindings/py/Cargo.toml
+          args: -r -o dist -i python3.13t --compatibility pypi -m bindings/py/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: manylinux2014 # TODO: don't use default cross-compile containers
       - name: Build CLI wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release -o dist -i python3 -m bindings/py/Cargo.toml
+          args: --release -o dist -m bindings/py/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: manylinux2014
       - name: Fix CLI wheel compatibility
@@ -239,7 +239,7 @@ jobs:
       - name: pytest (native)
         # TODO: run tests on x86_32. Currently skipped because no containers are used here
         # and run-on-arch-action does not support x86_32
-        if: matrix.platform.native && matrix.platform.target != 'x86'
+        if: ${{ matrix.platform.native && matrix.platform.target != 'x86' }}
         run: /bin/bash .github/scripts/run-pytest.sh
       - name: pytest (emulated)
         if: ${{ !matrix.platform.native }}
@@ -256,7 +256,7 @@ jobs:
             export PATH=$PATH:$HOME/.local/bin
             /bin/bash .github/scripts/run-pytest.sh
       - name: linters
-        if: matrix.platform.target == 'x86_64'
+        if: ${{ matrix.platform.target == 'x86_64' }}
         shell: bash
         run: |
           cd bindings/py
@@ -292,13 +292,13 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist -m bindings/py/Cargo.toml -i python3.13t
+          args: --release --out dist -m bindings/py/Cargo.toml -i python3.13t --compatibility pypi
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Build CLI wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist -i python3 -m bindings/py/Cargo.toml
+          args: --release --out dist -m bindings/py/Cargo.toml --compatibility pypi
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Fix CLI wheel compatibility
         run: ./sysand/scripts/universal_wheel.py dist/sysand_cli*
@@ -332,7 +332,7 @@ jobs:
     name: Release to testpypi
     environment: testpypi
     runs-on: ubuntu-latest # TODO: maybe use ubuntu-slim here?
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
     needs: [linux, musllinux, macos, windows, sdist]
     permissions:
       # Used to sign the release artifacts
@@ -356,7 +356,7 @@ jobs:
             cp "${{ steps.attest.outputs.bundle-path }}" "$file.publish.attestation"
           done
       - name: Publish to PyPI
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
         run: |
           echo 'index = [{ name = "testpypi", url = "https://test.pypi.org/simple/", publish-url = "https://test.pypi.org/legacy/", default = true }]' > uv.toml
           pip install uv # TODO: be consistent: we sometimes use setup-uv action, sometimes curl and here this
