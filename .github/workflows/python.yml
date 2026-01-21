@@ -280,8 +280,8 @@ jobs:
   sdist:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Maturin fixup
         # Maturin-action blindly downloads the specified toolchain without
         # checking that it won't be needed at all for sdist
         # TODO: fix maturin so that this isn't needed
