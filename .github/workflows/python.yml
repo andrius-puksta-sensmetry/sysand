@@ -290,7 +290,7 @@ jobs:
         uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # 1.49.4
         with:
           command: sdist
-          args: -o dist --compatibility pypi -m bindings/py/Cargo.toml
+          args: -o dist -m bindings/py/Cargo.toml
       - name: Upload sdist
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # 6.0.0
         with:
