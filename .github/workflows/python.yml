@@ -180,7 +180,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release -o dist -m bindings/py/Cargo.toml
+          args: -r -o dist --compatibility pypi -m bindings/py/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: manylinux2014
       - name: Build bindings free-threaded wheels
@@ -204,7 +204,11 @@ jobs:
         # TODO: run tests on x86_32. Currently skipped because no containers are used here
         # and run-on-arch-action does not support x86_32
         if: ${{ matrix.platform.native && matrix.platform.target != 'x86' }}
-        run: /bin/bash .github/scripts/run-pytest.sh
+        run: |
+          ls -la
+          ls -la ../../
+          ls -la ../../dist/
+          /bin/bash .github/scripts/run-pytest.sh
       - name: pytest (emulated)
         if: ${{ !matrix.platform.native }}
         uses: uraimo/run-on-arch-action@v3
