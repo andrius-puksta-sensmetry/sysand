@@ -74,14 +74,14 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Build CLI wheels
         # CLI wheels are independent of python version
-        if: ${{ matrix.python.label == "default" }}
+        if: ${{ matrix.python.label == 'default' }}
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.rust_target }}
-          args: --release --out dist -m sysand/Cargo.toml
+          args: --release --out dist -m sysand/Cargo.toml --compatibility pypi
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Fix CLI wheel compatibility
-        if: ${{ matrix.python.label == "default" }}
+        if: ${{ matrix.python.label == 'default' }}
         shell: bash
         run: python3 sysand/scripts/universal_wheel.py dist/sysand_cli*
       - name: Upload wheels
