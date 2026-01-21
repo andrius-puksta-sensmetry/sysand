@@ -94,7 +94,7 @@ jobs:
           cd bindings/py
           cargo test --package sysand-py --verbose --no-default-features --target ${{ matrix.platform.rust_target }}
       - name: Retrieve CLI wheel to satisfy deps
-        if: ${{ matrix.python.label != "default" }}
+        if: ${{ matrix.python.label != 'default' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # 7.0.0
         with:
           name: wheels-windows-${{ matrix.platform.target }}-default
