@@ -65,14 +65,16 @@ fn macro_get_project() {
         website: None,
         topic: vec![],
         usage: vec![],
+        extra_fields: Default::default(),
     };
     let meta = InterchangeProjectMetadataRaw {
-        index: indexmap::IndexMap::new(),
+        index: Default::default(),
         created: "0000-00-00T00:00:00.123456789Z".to_string(),
         metamodel: None,
         includes_derived: None,
         includes_implied: None,
         checksum: None,
+        extra_fields: Default::default(),
     };
     let test_double = OneVariantProjectRead::Variant(InMemoryProject {
         info: Some(info.clone()),
@@ -128,6 +130,7 @@ fn macro_put_info() {
         website: None,
         topic: vec![],
         usage: vec![],
+        extra_fields: Default::default(),
     };
     let mut project = OneVariantProjectMut::Variant(InMemoryProject::new());
 
@@ -141,12 +144,13 @@ fn macro_put_info() {
 #[test]
 fn macro_put_meta() {
     let meta = InterchangeProjectMetadataRaw {
-        index: indexmap::IndexMap::new(),
+        index: Default::default(),
         created: "0000-00-00T00:00:00.123456789Z".to_string(),
         metamodel: None,
         includes_derived: None,
         includes_implied: None,
         checksum: None,
+        extra_fields: Default::default(),
     };
     let mut project = OneVariantProjectMut::Variant(InMemoryProject::new());
 

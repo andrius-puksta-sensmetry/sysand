@@ -45,6 +45,7 @@ fn make_fixture() -> IndexEntryProject<Unauthenticated> {
         usage: vec![InterchangeProjectUsageRaw {
             resource: format!("{PKG_SYSAND_PREFIX}acme/widget"),
             version_constraint: Some("^1.0".to_string()),
+            extra_fields: Default::default(),
         }],
         kpar_size: std::num::NonZeroU64::new(42).unwrap(),
         kpar_digest,

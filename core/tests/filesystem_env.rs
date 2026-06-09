@@ -106,6 +106,7 @@ version = \"0.1\"
                 website: None,
                 topic: vec![],
                 usage: vec![],
+                extra_fields: Default::default(),
             };
 
             let mut index = IndexMap::new();
@@ -118,6 +119,7 @@ version = \"0.1\"
                 includes_derived: None,
                 includes_implied: None,
                 checksum: None,
+                extra_fields: Default::default(),
             };
 
             let mut source_project = InMemoryProject::default();
@@ -196,6 +198,7 @@ version = \"0.1\"
                 website: None,
                 topic: vec![],
                 usage: vec![],
+                extra_fields: Default::default(),
             };
             let mut index = IndexMap::new();
             index.insert("Other".to_string(), String::from("Other.sysml"));
@@ -206,6 +209,7 @@ version = \"0.1\"
                 includes_derived: None,
                 includes_implied: None,
                 checksum: None,
+                extra_fields: Default::default(),
             };
             let mut other_project = InMemoryProject::default();
             other_project.put_project(&info, &meta, true)?;
@@ -263,6 +267,7 @@ version = \"0.1\"
             website: None,
             topic: vec![],
             usage: vec![],
+            extra_fields: Default::default(),
         };
 
         let mut index = IndexMap::new();
@@ -275,6 +280,7 @@ version = \"0.1\"
             includes_derived: None,
             includes_implied: None,
             checksum: None,
+            extra_fields: Default::default(),
         };
 
         let mut source_project = InMemoryProject::default();

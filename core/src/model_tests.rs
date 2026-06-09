@@ -31,15 +31,17 @@ fn json_hash_agrees_with_shell() {
         website: None,
         topic: vec![],
         usage: vec![],
+        extra_fields: Default::default(),
     };
 
     let meta = InterchangeProjectMetadataRaw {
-        index: IndexMap::new(),
+        index: Default::default(),
         created: "0000-00-00T00:00:00.123456789Z".to_string(),
         metamodel: None,
         includes_derived: None,
         includes_implied: None,
         checksum: None,
+        extra_fields: Default::default(),
     };
 
     assert_eq!(

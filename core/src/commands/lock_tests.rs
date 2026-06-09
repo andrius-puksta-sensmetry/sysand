@@ -62,6 +62,7 @@ fn lock_preserves_project_publisher() {
             website: None,
             topic: vec![],
             usage: vec![],
+            extra_fields: Default::default(),
         },
         InterchangeProjectMetadataRaw {
             index: Default::default(),
@@ -70,6 +71,7 @@ fn lock_preserves_project_publisher() {
             includes_derived: None,
             includes_implied: None,
             checksum: None,
+            extra_fields: Default::default(),
         },
     );
     project.nominal_sources = vec![Source::Editable {

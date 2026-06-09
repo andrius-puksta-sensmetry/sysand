@@ -27,6 +27,7 @@ fn init_basic() -> Result<(), Box<dyn std::error::Error>> {
             website: None,
             topic: vec![],
             usage: vec![],
+            extra_fields: Default::default(),
         }
         .into()
     );

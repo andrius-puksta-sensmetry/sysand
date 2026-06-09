@@ -20,8 +20,10 @@ fn project_with_usage(resource: &str) -> InMemoryProject {
             usage: vec![InterchangeProjectUsageRaw {
                 resource: resource.to_owned(),
                 version_constraint: None,
+                extra_fields: Default::default(),
             }],
             website: None,
+            extra_fields: Default::default(),
         }),
         ..InMemoryProject::default()
     }

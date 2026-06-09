@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 
 use fluent_uri::Iri;
-use indexmap::IndexMap;
 
 use crate::{
     model::{InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw},
@@ -34,14 +33,16 @@ fn mock_project<S: AsRef<str>, T: AsRef<str>, V: AsRef<str>>(
                 website: None,
                 topic: vec![],
                 usage: vec![],
+                extra_fields: Default::default(),
             }),
             meta: Some(InterchangeProjectMetadataRaw {
-                index: IndexMap::default(),
+                index: Default::default(),
                 created: crate::model::format_created_now(),
                 metamodel: None,
                 includes_derived: None,
                 includes_implied: None,
-                checksum: Some(IndexMap::default()),
+                checksum: Some(Default::default()),
+                extra_fields: Default::default(),
             }),
             files: HashMap::default(),
             nominal_sources: vec![],

@@ -19,6 +19,7 @@ fn project() -> InMemoryProject {
             topic: vec![],
             usage: vec![],
             website: None,
+            extra_fields: Default::default(),
         }),
         ..InMemoryProject::default()
     }

@@ -36,15 +36,17 @@ fn storage_example() -> InMemoryProject {
                 website: None,
                 topic: vec![],
                 usage: vec![],
+                extra_fields: Default::default(),
             }
             .into(),
             &InterchangeProjectMetadata {
-                index: IndexMap::new(),
+                index: Default::default(),
                 created: DateTime::from_timestamp(1, 2).unwrap(),
                 metamodel: None,
                 includes_derived: None,
                 includes_implied: None,
                 checksum: None,
+                extra_fields: Default::default(),
             }
             .into(),
             true,

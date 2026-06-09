@@ -42,7 +42,7 @@ hex.workspace = true
 dirs = { version = "6.0.0", optional = true}
 fluent-uri = { version = "0.4.1", features = ["serde", "net"] }
 idna = { version = "1.1.0", default-features = false, features = ["compiled_data"] }
-indexmap = { version = "2.13.0", default-features = false, features = ["serde"] }
+indexmap.workspace = true
 log = { version = "0.4.29", default-features = false }
 pubgrub = { version = "0.4.0", default-features = false }
 # partialzip = { version = "5.0.0", default-features = false, optional = true }

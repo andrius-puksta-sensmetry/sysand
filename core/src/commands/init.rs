@@ -67,14 +67,16 @@ pub fn do_init_ext<P: ProjectMut>(
             topic: vec![],
             usage: vec![],
             website: None,
+            extra_fields: Default::default(),
         },
         &InterchangeProjectMetadata {
-            index: indexmap::IndexMap::new(),
+            index: Default::default(),
             created: chrono::Utc::now(),
             metamodel: None,
             includes_derived: None,
             includes_implied: None,
             checksum: None,
+            extra_fields: Default::default(),
         }
         .into(),
         false,

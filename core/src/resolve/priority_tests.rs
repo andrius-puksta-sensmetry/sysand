@@ -33,6 +33,7 @@ fn mock_project<S: AsRef<str>, T: AsRef<str>, V: AsRef<str>>(
                 website: None,
                 topic: vec![],
                 usage: vec![],
+                extra_fields: Default::default(),
             }),
             meta: Some(InterchangeProjectMetadataRaw {
                 index: IndexMap::default(),
@@ -41,6 +42,7 @@ fn mock_project<S: AsRef<str>, T: AsRef<str>, V: AsRef<str>>(
                 includes_derived: None,
                 includes_implied: None,
                 checksum: Some(IndexMap::default()),
+                extra_fields: Default::default(),
             }),
             files: HashMap::default(),
             nominal_sources: vec![],

@@ -68,6 +68,7 @@ mod browser_tests {
                 website: None,
                 topic: vec![],
                 usage: vec![],
+                extra_fields: Default::default(),
             }
             .into()
         );

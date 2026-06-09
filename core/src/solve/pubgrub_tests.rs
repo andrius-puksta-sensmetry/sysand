@@ -36,16 +36,19 @@ fn trivial_memory_project(
                 .map(|(d, dv)| InterchangeProjectUsageRaw {
                     resource: d.to_string(),
                     version_constraint: dv.map(|x| x.to_string()),
+                    extra_fields: Default::default(),
                 })
                 .collect(),
+            extra_fields: Default::default(),
         }),
         meta: Some(InterchangeProjectMetadataRaw {
-            index: IndexMap::default(),
+            index: Default::default(),
             created: "123".to_string(),
             metamodel: None,
             includes_derived: None,
             includes_implied: None,
             checksum: Some(IndexMap::default()),
+            extra_fields: Default::default(),
         }),
         files: HashMap::default(),
         nominal_sources: vec![],
@@ -96,6 +99,7 @@ fn version_selection() -> Result<(), Box<dyn std::error::Error>> {
         vec![InterchangeProjectUsage {
             resource: fluent_uri::Iri::parse("urn:kpar:version_selection")?.into(),
             version_constraint: Some(semver::VersionReq::parse(">=2.0.0")?),
+            extra_fields: Default::default(),
         }],
         resolver,
     )?;
@@ -154,10 +158,12 @@ fn diamond_selection() -> Result<(), Box<dyn std::error::Error>> {
             InterchangeProjectUsage {
                 resource: fluent_uri::Iri::parse("urn:kpar:diamond_selection_a")?.into(),
                 version_constraint: Some(semver::VersionReq::parse(">=0.1.0")?),
+                extra_fields: Default::default(),
             },
             InterchangeProjectUsage {
                 resource: fluent_uri::Iri::parse("urn:kpar:diamond_selection_b")?.into(),
                 version_constraint: None,
+                extra_fields: Default::default(),
             },
         ],
         resolver,

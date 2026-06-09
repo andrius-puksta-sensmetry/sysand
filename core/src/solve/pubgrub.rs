@@ -17,13 +17,37 @@ use thiserror::Error;
 
 use crate::{model::InterchangeProjectUsage, project::ProjectRead, resolve::ResolveRead};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum DependencyIdentifier {
     /// Dependencies that are to be resolved.
     Requested(Vec<InterchangeProjectUsage>),
     /// Found dependencies. Note that this does not mean that the
     /// required version was found, just that the IRI was resolved.
     Remote(fluent_uri::Iri<String>),
+}
+
+// TODO: how far is this from `derive(Hash)`?
+impl std::hash::Hash for DependencyIdentifier {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            DependencyIdentifier::Requested(usages) => {
+                // Ignoring extra_fields should be fine here
+                for u in usages {
+                    let InterchangeProjectUsage {
+                        resource,
+                        version_constraint,
+                        extra_fields: _,
+                    } = u;
+                    resource.hash(state);
+                    version_constraint.hash(state);
+                }
+            }
+            DependencyIdentifier::Remote(iri) => {
+                iri.hash(state);
+            }
+        }
+    }
 }
 
 impl Display for DependencyIdentifier {

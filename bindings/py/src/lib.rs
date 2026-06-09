@@ -4,11 +4,13 @@
 use std::{collections::HashMap, process::ExitCode, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
+use indexmap::IndexMap;
 use pyo3::{
     exceptions::{PyFileExistsError, PyFileNotFoundError, PyIOError, PyRuntimeError, PyValueError},
     prelude::*,
 };
 use semver::{Version, VersionReq};
+
 use sysand_core::{
     add::do_add_guess,
     auth::Unauthenticated,
@@ -28,7 +30,10 @@ use sysand_core::{
     include::do_include,
     info::{InfoError, InfoProjectError, do_info, do_info_project},
     init::InitError,
-    model::{InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw},
+    model::{
+        InterchangeProjectChecksumRaw, InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw,
+        InterchangeProjectUsageRaw,
+    },
     project::{
         ProjectRead as _,
         local_kpar::{KparInnerPath, LocalKParProject},
@@ -123,7 +128,7 @@ fn do_env_py_local_dir(path: String) -> PyResult<()> {
 )]
 fn do_info_py_path(
     path: String,
-) -> PyResult<(InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw)> {
+) -> PyResult<(InterchangeProjectInfoRawPy, InterchangeProjectMetadataRawPy)> {
     let _ = pyo3_log::try_init();
 
     let project = LocalSrcProject {
@@ -133,7 +138,7 @@ fn do_info_py_path(
     };
 
     match do_info_project(&project) {
-        Ok(info_meta) => Ok(info_meta),
+        Ok((info, meta)) => Ok((info.into(), meta.into())),
         Err(
             e @ (InfoProjectError::MissingProject
             | InfoProjectError::MissingInfo
@@ -152,7 +157,7 @@ fn do_info_py(
     uri: String,
     relative_file_root: String,
     index_urls: Option<Vec<String>>,
-) -> PyResult<(InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw)> {
+) -> PyResult<(InterchangeProjectInfoRawPy, InterchangeProjectMetadataRawPy)> {
     let _ = pyo3_log::try_init();
 
     py.detach(|| {
@@ -186,7 +191,7 @@ fn do_info_py(
         .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         match do_info(&uri, &combined_resolver) {
-            Ok(info_meta) => Ok(info_meta),
+            Ok((info, meta)) => Ok((info.into(), meta.into())),
             Err(
                 e @ (InfoError::NoSemanticVersionsFound(_)
                 | InfoError::NoResolve(..)
@@ -619,4 +624,102 @@ pub fn sysand_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 fn env_read_to_pyerr(err: EnvMetadataError) -> PyErr {
     PyIOError::new_err(format!("failed to read environment metadata: {err}"))
+}
+
+#[derive(Eq, Clone, PartialEq, Debug, FromPyObject, IntoPyObject)]
+pub struct InterchangeProjectUsageRawPy {
+    pub resource: String,
+    pub version_constraint: Option<String>,
+}
+
+impl From<InterchangeProjectUsageRaw> for InterchangeProjectUsageRawPy {
+    fn from(value: InterchangeProjectUsageRaw) -> Self {
+        let InterchangeProjectUsageRaw {
+            resource,
+            version_constraint,
+            extra_fields: _,
+        } = value;
+        Self {
+            resource,
+            version_constraint,
+        }
+    }
+}
+
+/// The only difference from `InterchangeProjectInfoRaw` for now
+/// is absence of `extra_fields`, as `serde_json::Value` can't derive
+/// `FromPyObject`/`IntoPyObject`
+#[derive(Eq, Clone, PartialEq, Debug, FromPyObject, IntoPyObject)]
+pub struct InterchangeProjectInfoRawPy {
+    pub publisher: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub version: String,
+    pub license: Option<String>,
+    pub maintainer: Vec<String>,
+    pub website: Option<String>,
+    pub topic: Vec<String>,
+    pub usage: Vec<InterchangeProjectUsageRawPy>,
+}
+
+impl From<InterchangeProjectInfoRaw> for InterchangeProjectInfoRawPy {
+    fn from(value: InterchangeProjectInfoRaw) -> Self {
+        let InterchangeProjectInfoRaw {
+            publisher,
+            name,
+            description,
+            version,
+            license,
+            maintainer,
+            website,
+            topic,
+            usage,
+            extra_fields: _,
+        } = value;
+
+        Self {
+            publisher,
+            name,
+            description,
+            version,
+            license,
+            maintainer,
+            website,
+            topic,
+            usage: usage.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[derive(Eq, Clone, PartialEq, Debug, FromPyObject, IntoPyObject)]
+pub struct InterchangeProjectMetadataRawPy {
+    pub index: IndexMap<String, String>,
+    pub created: String,
+    pub metamodel: Option<String>,
+    pub includes_derived: Option<bool>,
+    pub includes_implied: Option<bool>,
+    pub checksum: Option<IndexMap<String, InterchangeProjectChecksumRaw>>,
+}
+
+impl From<InterchangeProjectMetadataRaw> for InterchangeProjectMetadataRawPy {
+    fn from(value: InterchangeProjectMetadataRaw) -> Self {
+        let InterchangeProjectMetadataRaw {
+            index,
+            created,
+            metamodel,
+            includes_derived,
+            includes_implied,
+            checksum,
+            extra_fields: _,
+        } = value;
+
+        Self {
+            index,
+            created,
+            metamodel,
+            includes_derived,
+            includes_implied,
+            checksum,
+        }
+    }
 }

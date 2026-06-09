@@ -66,6 +66,7 @@ pub fn do_add_guess<P: ProjectMut>(
             }
         },
         version_constraint,
+        extra_fields: Default::default(),
     };
     do_add(project, &usage_raw)
 }

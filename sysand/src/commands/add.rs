@@ -196,6 +196,7 @@ pub fn command_add<Policy: HTTPAuthentication>(
     let usage_raw = InterchangeProjectUsageRaw {
         resource: iri.to_owned(),
         version_constraint,
+        extra_fields: Default::default(),
     };
 
     if !no_lock {

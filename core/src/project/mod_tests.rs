@@ -41,9 +41,10 @@ fn canonicalization_no_checksums() -> Result<(), Box<dyn std::error::Error>> {
             website: None,
             topic: vec![],
             usage: vec![],
+            extra_fields: Default::default(),
         }),
         meta: Some(InterchangeProjectMetadataRaw {
-            index: IndexMap::default(),
+            index: Default::default(),
             created: "123".to_string(),
             metamodel: None,
             includes_derived: None,
@@ -55,6 +56,7 @@ fn canonicalization_no_checksums() -> Result<(), Box<dyn std::error::Error>> {
                     value: "".to_string(),
                 },
             )])),
+            extra_fields: Default::default(),
         }),
         files: HashMap::from([(
             Utf8UnixPath::new("MyFile.txt").to_path_buf(),

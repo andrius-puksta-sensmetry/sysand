@@ -246,6 +246,7 @@ fn inject_usages_versions<
         info.usage.push(InterchangeProjectUsageRaw {
             resource: usage.as_ref().to_string(),
             version_constraint: version_req.map(|x| x.as_ref().to_string()),
+            extra_fields: Default::default(),
         });
     }
 

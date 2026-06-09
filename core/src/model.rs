@@ -22,13 +22,21 @@ pub const KNOWN_METAMODELS: [&str; 2] = [
     "https://www.omg.org/spec/KerML/20250201",
 ];
 
-#[derive(Eq, Clone, PartialEq, Serialize, Deserialize, Hash, Debug)]
-#[cfg_attr(feature = "python", derive(FromPyObject, IntoPyObject))]
+pub const SYSML_METAMODEL_PREFIX: &str = "https://www.omg.org/spec/SysML/";
+pub const KERML_METAMODEL_PREFIX: &str = "https://www.omg.org/spec/KerML/";
+
+#[derive(Eq, Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct InterchangeProjectUsageG<Iri, VersionReq> {
     pub resource: Iri, // TODO: We should have a fallback for invalid IRIs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version_constraint: Option<VersionReq>, // TODO: We should have a fallback for invalid semvers
+
+    // Catch-all for any unknown/extra fields - they are permitted by
+    // the spec, and if we don't save them here, they will not
+    // roundtrip
+    #[serde(flatten, skip_serializing_if = "IndexMap::is_empty", default)]
+    pub extra_fields: IndexMap<String, serde_json::Value>,
 }
 pub type InterchangeProjectUsageRaw = InterchangeProjectUsageG<String, String>;
 pub type InterchangeProjectUsage =
@@ -62,6 +70,8 @@ impl InterchangeProjectUsageRaw {
                     })
                 })
                 .transpose()?,
+            // TODO: should we fail if these are present? What about catching user typos?
+            extra_fields: self.extra_fields.clone(),
         })
     }
 }
@@ -71,6 +81,7 @@ impl From<InterchangeProjectUsage> for InterchangeProjectUsageRaw {
         InterchangeProjectUsageRaw {
             resource: value.resource.to_string(),
             version_constraint: value.version_constraint.map(|x| x.to_string()),
+            extra_fields: Default::default(),
         }
     }
 }
@@ -82,6 +93,7 @@ impl From<InterchangeProjectUsageG<fluent_uri::Iri<String>, semver::VersionReq>>
         InterchangeProjectUsageG {
             resource: value.resource.to_string(),
             version_constraint: value.version_constraint,
+            extra_fields: Default::default(),
         }
     }
 }
@@ -95,7 +107,7 @@ impl TryFrom<InterchangeProjectUsageRaw> for InterchangeProjectUsage {
 }
 
 #[derive(Eq, Clone, PartialEq, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "python", derive(FromPyObject, IntoPyObject))]
+// #[cfg_attr(feature = "python", derive(FromPyObject, IntoPyObject))]
 #[serde(rename_all = "camelCase")]
 pub struct InterchangeProjectInfoG<Iri, Version, VersionReq> {
     pub name: String,
@@ -125,6 +137,12 @@ pub struct InterchangeProjectInfoG<Iri, Version, VersionReq> {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub usage: Vec<InterchangeProjectUsageG<Iri, VersionReq>>,
+
+    // Catch-all for any unknown/extra fields - they are permitted by
+    // the spec, and if we don't save them here, they will not
+    // roundtrip
+    #[serde(flatten, skip_serializing_if = "IndexMap::is_empty", default)]
+    pub extra_fields: IndexMap<String, serde_json::Value>,
 }
 
 pub type InterchangeProjectInfoRaw = InterchangeProjectInfoG<String, String, String>;
@@ -147,6 +165,7 @@ impl From<InterchangeProjectInfo> for InterchangeProjectInfoRaw {
                 .iter()
                 .map(|u| From::from(u.to_owned()))
                 .collect(),
+            extra_fields: value.extra_fields,
         }
     }
 }
@@ -165,6 +184,7 @@ impl<Iri: PartialEq + Clone, Version, VersionReq: Clone>
             website: None,
             topic: vec![],
             usage: vec![],
+            extra_fields: Default::default(),
         }
     }
     // pub fn push_usage(&mut self, resource: Iri, version_requirement: Option<VersionReq>) {
@@ -216,6 +236,7 @@ impl InterchangeProjectInfoRaw {
 
             topic: self.topic.clone(),
             usage,
+            extra_fields: self.extra_fields.clone(),
         })
     }
 }
@@ -395,11 +416,15 @@ pub struct InterchangeProjectChecksumRaw {
 }
 
 #[derive(Eq, Clone, PartialEq, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "python", derive(FromPyObject, IntoPyObject))]
 #[serde(rename_all = "camelCase")]
 pub struct InterchangeProjectMetadataG<Iri, Path: Eq + Hash, DateTime, IPC> {
     pub index: IndexMap<String, Path>,
 
+    // Acdording to https://www.omg.org/spec/KerML/20250201/KerML-Model-Interchange.json,
+    // this is specifically RFC3339's "date-time" format from
+    // https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
+    // represented as string according to
+    // https://json-schema.org/draft/2020-12/draft-bhutton-json-schema-validation-00#rfc.section.7.3.1
     pub created: DateTime,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -413,6 +438,12 @@ pub struct InterchangeProjectMetadataG<Iri, Path: Eq + Hash, DateTime, IPC> {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checksum: Option<IndexMap<Path, IPC>>,
+
+    // Catch-all for any unknown/extra fields - they are permitted by
+    // the spec, and if we don't save them here, they will not
+    // roundtrip
+    #[serde(flatten, skip_serializing_if = "IndexMap::is_empty", default)]
+    pub extra_fields: IndexMap<String, serde_json::Value>,
 }
 
 pub type InterchangeProjectMetadataRaw =
@@ -464,6 +495,7 @@ impl From<InterchangeProjectMetadata> for InterchangeProjectMetadataRaw {
                     })
                     .collect()
             }),
+            extra_fields: Default::default(),
         }
     }
 }
@@ -524,12 +556,13 @@ impl InterchangeProjectMetadata {
 impl Default for InterchangeProjectMetadataRaw {
     fn default() -> Self {
         InterchangeProjectMetadataRaw {
-            index: IndexMap::default(),
+            index: Default::default(),
             created: format_created_now(),
             metamodel: None,
             includes_derived: None,
             includes_implied: None,
             checksum: None,
+            extra_fields: Default::default(),
         }
     }
 }
@@ -587,7 +620,6 @@ impl InterchangeProjectMetadataRaw {
                 .iter()
                 .map(|(k, v)| (k.to_owned(), Utf8UnixPath::new(v).to_path_buf()))
                 .collect(),
-            // TODO: this is not strictly correct, as RFC3339 only partially overlaps with ISO8601
             created: chrono::DateTime::parse_from_rfc3339(&self.created)
                 .map_err(|e| {
                     InterchangeProjectValidationError::DatetimeParse(
@@ -610,6 +642,7 @@ impl InterchangeProjectMetadataRaw {
             includes_derived: self.includes_derived,
             includes_implied: self.includes_implied,
             checksum,
+            extra_fields: self.extra_fields.clone(),
         })
     }
 
@@ -684,12 +717,13 @@ impl<Iri, Path: Eq + Hash + Clone, DateTime, IPC>
 {
     pub fn minimal(created: DateTime) -> Self {
         InterchangeProjectMetadataG {
-            index: IndexMap::default(),
+            index: Default::default(),
             created,
             metamodel: None,
             includes_derived: None,
             includes_implied: None,
             checksum: None,
+            extra_fields: Default::default(),
         }
     }
 

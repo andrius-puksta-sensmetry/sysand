@@ -147,6 +147,7 @@ pub fn command_env_install<Policy: HTTPAuthentication>(
         let usages = vec![InterchangeProjectUsage {
             resource: fluent_uri::Iri::from_str(iri.as_ref())?,
             version_constraint: version.map(|v| semver::VersionReq::parse(&v)).transpose()?,
+            extra_fields: Default::default(),
         }];
 
         let LockOutcome {

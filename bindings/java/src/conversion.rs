@@ -203,6 +203,7 @@ fn get_usage_array_field<'local>(
         result.push(InterchangeProjectUsageRaw {
             resource,
             version_constraint,
+            extra_fields: Default::default(),
         });
     }
     Some(result)
@@ -231,6 +232,7 @@ pub(crate) fn java_info_to_raw<'local>(
         website,
         topic,
         usage,
+        extra_fields: Default::default(),
     })
 }
 
@@ -332,6 +334,7 @@ pub(crate) fn java_metadata_to_raw<'local>(
         includes_derived,
         includes_implied,
         checksum,
+        extra_fields: Default::default(),
     })
 }
 
