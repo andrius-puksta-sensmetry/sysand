@@ -224,17 +224,21 @@ fn resolve_candidates<R: ResolveRead>(
         Entry::Vacant(vacant_entry) => {
             let mut found = vec![];
 
+            let resolve_info = crate::resolve::ResolutionInfo::iri(uri.clone());
             match resolver
-                .resolve_read(uri)
+                .resolve_read(&resolve_info)
                 .map_err(InternalSolverError::Resolution)?
             {
-                crate::resolve::ResolutionOutcome::UnsupportedIRIType(msg) => {
+                crate::resolve::ResolutionOutcome::UnsupportedUsageType { reason } => {
                     return Err(InternalSolverError::UnsupportedIriType(format!(
-                        "unsupported IRI type of `{uri}`: {msg}"
+                        "unsupported IRI type of `{uri}`: {reason}"
                     )));
                 }
-                crate::resolve::ResolutionOutcome::Unresolvable(msg) => {
-                    return Err(InternalSolverError::NotFound(uri.as_str().into(), msg));
+                crate::resolve::ResolutionOutcome::NotFound { reason } => {
+                    return Err(InternalSolverError::NotFound(uri.as_str().into(), reason));
+                }
+                crate::resolve::ResolutionOutcome::Unresolvable { reason } => {
+                    return Err(InternalSolverError::NotFound(uri.as_str().into(), reason));
                 }
                 crate::resolve::ResolutionOutcome::Resolved(alternatives) => {
                     for alternative in alternatives {
