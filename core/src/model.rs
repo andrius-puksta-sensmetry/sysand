@@ -31,11 +31,6 @@ use crate::utils::{
 // pub struct ParsedIri(fluent_uri::Iri<String>);
 // pub struct NormalisedIri(fluent_uri::Iri<String>);
 
-pub const KNOWN_METAMODELS: [&str; 2] = [
-    "https://www.omg.org/spec/SysML/20250201",
-    "https://www.omg.org/spec/KerML/20250201",
-];
-
 /// The two families of `metamodel` values Sysand recognizes: the OMG
 /// specifications, and the Syside metamodels that extend them and mirror
 /// the OMG value they extend.
@@ -69,6 +64,173 @@ impl Display for MetamodelFamily {
             Self::Omg => "OMG",
             Self::Syside => "Syside",
         })
+    }
+}
+
+/// The specification a metamodel value names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SpecKind {
+    SysMl,
+    KerMl,
+}
+
+impl SpecKind {
+    /// The segment a metamodel value spells this specification with.
+    pub fn segment(self) -> &'static str {
+        match self {
+            Self::SysMl => "SysML",
+            Self::KerMl => "KerML",
+        }
+    }
+
+    fn parse(segment: &str) -> Option<Self> {
+        match segment {
+            "SysML" => Some(Self::SysMl),
+            "KerML" => Some(Self::KerMl),
+            _ => None,
+        }
+    }
+}
+
+impl Display for SpecKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.segment())
+    }
+}
+
+/// Why a metamodel value is not one Sysand recognizes.
+///
+/// The two cases are kept apart because publishing distinguishes them: a
+/// value outside the recognized families is not a metamodel Sysand
+/// supports at all, while one of ours with something other than a release
+/// date at the end is a malformed value of a supported metamodel.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum MetamodelParseError {
+    #[error("the metamodel is not a SysML or KerML specification of a recognized family")]
+    Unrecognized,
+    #[error("`{date}` is not a metamodel release date (eight digits)")]
+    InvalidDate { date: String },
+}
+
+/// A recognized metamodel, parsed from its value:
+/// `<family prefix><spec-kind>/<date>`, where `<date>` is eight digits.
+///
+/// Whether such a date is a *plausible* release is a separate question,
+/// and one only the index asks (`commands::publish`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MetamodelKind {
+    family: MetamodelFamily,
+    spec: SpecKind,
+    date: String,
+}
+
+impl MetamodelKind {
+    /// Parses a metamodel value. Nothing is trimmed: a trailing `/` makes
+    /// the date invalid, so that a value is recognized under exactly one
+    /// spelling and [`MetamodelKind::url`] returns the value it was
+    /// parsed from.
+    pub fn parse(metamodel: &str) -> Result<Self, MetamodelParseError> {
+        let Some((family, rest)) = [MetamodelFamily::Omg, MetamodelFamily::Syside]
+            .into_iter()
+            .find_map(|family| {
+                metamodel
+                    .strip_prefix(family.prefix())
+                    .map(|rest| (family, rest))
+            })
+        else {
+            return Err(MetamodelParseError::Unrecognized);
+        };
+        let Some((spec, date)) = rest.split_once('/') else {
+            return Err(MetamodelParseError::Unrecognized);
+        };
+        let Some(spec) = SpecKind::parse(spec) else {
+            return Err(MetamodelParseError::Unrecognized);
+        };
+        if date.len() != 8 || !date.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(MetamodelParseError::InvalidDate {
+                date: date.to_owned(),
+            });
+        }
+        Ok(Self {
+            family,
+            spec,
+            date: date.to_owned(),
+        })
+    }
+
+    pub fn family(&self) -> MetamodelFamily {
+        self.family
+    }
+
+    pub fn spec(&self) -> SpecKind {
+        self.spec
+    }
+
+    pub fn date(&self) -> &str {
+        &self.date
+    }
+
+    /// The value this kind was parsed from, rebuilt; used when a
+    /// standard-library usage IRI is composed from the target's
+    /// metamodel.
+    pub fn url(&self) -> String {
+        format!(
+            "{}{}/{}",
+            self.family.prefix(),
+            self.spec.segment(),
+            self.date
+        )
+    }
+}
+
+impl Display for MetamodelKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.url())
+    }
+}
+
+/// How a project's `metamodel` enters the checks that compare two
+/// projects.
+///
+/// model-toml.md: "A project without a `metamodel` is treated as an
+/// OMG-metamodel project"; a json project without one "is treated as OMG
+/// with an unknown date: the direction rule applies, the release warning
+/// does not". An unrecognized value cannot be checked at all -- it already
+/// warned when it was read -- but it still selects the OMG schema
+/// (rule (a)).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EffectiveMetamodel {
+    Known(MetamodelKind),
+    /// No `metamodel` declared.
+    OmgUnknownDate,
+    /// A value outside both families.
+    Unrecognized(String),
+}
+
+impl EffectiveMetamodel {
+    pub fn from_declared(metamodel: Option<&str>) -> Self {
+        match metamodel {
+            None => Self::OmgUnknownDate,
+            Some(value) => MetamodelKind::parse(value)
+                .map_or_else(|_| Self::Unrecognized(value.to_owned()), Self::Known),
+        }
+    }
+
+    /// The schema the rest of the manifest is validated against: the OMG
+    /// one unless the value is a recognized Syside metamodel.
+    pub fn family(&self) -> MetamodelFamily {
+        match self {
+            Self::Known(kind) => kind.family(),
+            Self::OmgUnknownDate | Self::Unrecognized(_) => MetamodelFamily::Omg,
+        }
+    }
+
+    /// The release date, when there is one to compare.
+    pub fn date(&self) -> Option<&str> {
+        match self {
+            Self::Known(kind) => Some(kind.date()),
+            Self::OmgUnknownDate | Self::Unrecognized(_) => None,
+        }
     }
 }
 
@@ -1328,8 +1490,8 @@ impl InterchangeProjectMetadataRaw {
         };
 
         let metamodel = if let Some(m) = &self.metamodel {
-            if !KNOWN_METAMODELS.contains(&m.as_str()) {
-                log::warn!("project uses an unknown metamodel `{m}`");
+            if let Err(e) = MetamodelKind::parse(m) {
+                log::warn!("project uses an unknown metamodel `{m}`: {e}");
             }
             match fluent_uri::Iri::parse(m.to_owned()) {
                 Ok(i) => Some(i),

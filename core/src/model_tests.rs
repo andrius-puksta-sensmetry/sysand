@@ -5,9 +5,9 @@ use indexmap::IndexMap;
 
 use crate::{
     model::{
-        InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw, KERML_SPEC_PREFIX,
-        MetamodelFamily, PROJECT_FIELD_MAX_LEN, ProjectName, ProjectPublisher,
-        SYSML_SPEC_PREFIX,
+        EffectiveMetamodel, InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw,
+        KERML_SPEC_PREFIX, MetamodelFamily, MetamodelKind, MetamodelParseError,
+        PROJECT_FIELD_MAX_LEN, ProjectName, ProjectPublisher, SYSML_SPEC_PREFIX, SpecKind,
     },
     utils::lowercase_hex,
 };
@@ -721,4 +721,143 @@ fn metamodel_family_prefixes_and_names() {
     );
     assert_eq!(MetamodelFamily::Omg.to_string(), "OMG");
     assert_eq!(MetamodelFamily::Syside.to_string(), "Syside");
+}
+
+const OMG_SYSML: &str = "https://www.omg.org/spec/SysML/20250201";
+const OMG_KERML: &str = "https://www.omg.org/spec/KerML/20250201";
+const SYSIDE_SYSML: &str = "https://www.sysand.com/spec/SysML/20250201";
+const SYSIDE_KERML: &str = "https://www.sysand.com/spec/KerML/20250201";
+
+/// model-toml.md "Metamodel": a recognized value is
+/// `<family prefix><spec-kind>/<date>`, in either of the two families.
+#[test]
+fn metamodel_kind_parses_both_families() {
+    let sysml = MetamodelKind::parse(OMG_SYSML).expect("a recognized value");
+    assert_eq!(sysml.family(), MetamodelFamily::Omg);
+    assert_eq!(sysml.spec(), SpecKind::SysMl);
+    assert_eq!(sysml.date(), "20250201");
+
+    assert_eq!(
+        MetamodelKind::parse(OMG_KERML)
+            .expect("a recognized value")
+            .spec(),
+        SpecKind::KerMl
+    );
+    assert_eq!(
+        MetamodelKind::parse(SYSIDE_SYSML)
+            .expect("a recognized value")
+            .family(),
+        MetamodelFamily::Syside
+    );
+    assert_eq!(
+        MetamodelKind::parse(SYSIDE_KERML)
+            .expect("a recognized value")
+            .family(),
+        MetamodelFamily::Syside
+    );
+}
+
+/// The URL is rebuilt from the parts when a standard-library usage IRI is
+/// composed from the target's metamodel, so it has to be the value that
+/// was read.
+#[test]
+fn metamodel_kind_round_trips_through_its_url() {
+    for value in [OMG_SYSML, OMG_KERML, SYSIDE_SYSML, SYSIDE_KERML] {
+        assert_eq!(
+            MetamodelKind::parse(value)
+                .expect("a recognized value")
+                .url(),
+            value
+        );
+    }
+}
+
+#[test]
+fn metamodel_kind_rejects_other_values() {
+    for value in [
+        "https://example.com/spec/SysML/20250201",
+        "http://www.omg.org/spec/SysML/20250201",
+        "https://www.omg.org/spec/UML/20250201",
+        "https://www.omg.org/spec/SysML",
+    ] {
+        assert_eq!(
+            MetamodelKind::parse(value),
+            Err(MetamodelParseError::Unrecognized),
+            "{value} should not be recognized"
+        );
+    }
+
+    // The date is reported exactly as written, so that the caller can
+    // quote it (`publish` does).
+    for (value, date) in [
+        ("https://www.omg.org/spec/SysML/", ""),
+        ("https://www.omg.org/spec/SysML/2025020", "2025020"),
+        ("https://www.omg.org/spec/SysML/2025020a", "2025020a"),
+        ("https://www.omg.org/spec/SysML/20250201/", "20250201/"),
+        (
+            "https://www.omg.org/spec/SysML/20250201/extra",
+            "20250201/extra",
+        ),
+    ] {
+        assert_eq!(
+            MetamodelKind::parse(value),
+            Err(MetamodelParseError::InvalidDate {
+                date: date.to_owned()
+            }),
+            "{value} should have an invalid date"
+        );
+    }
+}
+
+/// model-toml.md "Metamodel": "A project without a `metamodel` is treated
+/// as an OMG-metamodel project"; an unrecognized value is validated
+/// against the OMG schema (rule (a)).
+#[test]
+fn effective_metamodel_of_a_project() {
+    let none = EffectiveMetamodel::from_declared(None);
+    assert_eq!(none, EffectiveMetamodel::OmgUnknownDate);
+    assert_eq!(none.family(), MetamodelFamily::Omg);
+    assert_eq!(none.date(), None);
+
+    let omg = EffectiveMetamodel::from_declared(Some(OMG_SYSML));
+    assert_eq!(omg.family(), MetamodelFamily::Omg);
+    assert_eq!(omg.date(), Some("20250201"));
+
+    let syside = EffectiveMetamodel::from_declared(Some(SYSIDE_KERML));
+    assert_eq!(syside.family(), MetamodelFamily::Syside);
+    assert_eq!(syside.date(), Some("20250201"));
+
+    let other = EffectiveMetamodel::from_declared(Some("https://example.com/x"));
+    assert_eq!(
+        other,
+        EffectiveMetamodel::Unrecognized("https://example.com/x".to_owned())
+    );
+    assert_eq!(other.family(), MetamodelFamily::Omg);
+    assert_eq!(other.date(), None);
+}
+
+/// Deleting `KNOWN_METAMODELS` means a release other than the two it
+/// listed is no longer reported as unknown; validation itself accepted
+/// them before and still does.
+#[test]
+fn validate_warns_only_for_an_unrecognized_metamodel() {
+    for value in [
+        "https://www.omg.org/spec/SysML/20250601",
+        SYSIDE_KERML,
+        "https://example.com/x",
+    ] {
+        let raw = InterchangeProjectMetadataRaw {
+            index: IndexMap::new(),
+            created: "2026-01-01T00:00:00Z".to_owned(),
+            metamodel: Some(value.to_owned()),
+            includes_derived: None,
+            includes_implied: None,
+            checksum: None,
+        };
+        let validated = raw.validate().expect("a valid metadata document");
+        assert_eq!(
+            validated.metamodel.as_ref().map(fluent_uri::Iri::as_str),
+            Some(value)
+        );
+    }
 }
