@@ -705,6 +705,66 @@ fn check_metamodel_rejects_invalid_kerml_version() {
     );
 }
 
+/// A Syside metamodel mirrors the OMG value it extends, so it publishes
+/// as the same specification kind.
+#[test]
+fn check_metamodel_accepts_both_families() {
+    for (metamodel, expected) in [
+        (
+            "https://www.sysand.com/spec/SysML/20250201",
+            AllowedMetamodelKind::SysML,
+        ),
+        (
+            "https://www.sysand.com/spec/KerML/20250201",
+            AllowedMetamodelKind::KerML,
+        ),
+    ] {
+        assert_eq!(
+            check_metamodel(metamodel).unwrap(),
+            expected,
+            "{metamodel} should be accepted"
+        );
+    }
+}
+
+/// Routing the check through `MetamodelKind` must not change which
+/// metamodel values an index rejects, nor how it names the reason.
+#[test]
+fn check_metamodel_preserves_the_rejections_of_0_2_x() {
+    for metamodel in [
+        "https://www.omg.org/spec/UML/20250201",
+        "https://www.omg.org/spec/SysML",
+    ] {
+        assert_matches!(
+            check_metamodel(metamodel).unwrap_err(),
+            PublishError::UnsupportedMetamodel { .. },
+            "{metamodel} should be unsupported"
+        );
+    }
+
+    for (metamodel, version) in [
+        ("https://www.omg.org/spec/SysML/", ""),
+        ("https://www.omg.org/spec/SysML/20250201/", "20250201/"),
+        (
+            "https://www.omg.org/spec/SysML/20250201/extra",
+            "20250201/extra",
+        ),
+        ("https://www.omg.org/spec/SysML/2025020a", "2025020a"),
+        ("https://www.omg.org/spec/SysML/20251301", "20251301"),
+    ] {
+        let err = check_metamodel(metamodel).unwrap_err();
+        let PublishError::InvalidMetamodelVersion {
+            metamodel: reported,
+            version: reported_version,
+        } = &err
+        else {
+            panic!("{metamodel} should have an invalid version, got: {err}");
+        };
+        assert_eq!(reported.as_ref(), metamodel);
+        assert_eq!(reported_version.as_ref(), version);
+    }
+}
+
 // --- check_usage ---
 
 fn usage(resource: &str) -> InterchangeProjectUsageRaw {

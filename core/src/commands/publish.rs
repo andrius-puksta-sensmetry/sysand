@@ -30,7 +30,8 @@ use crate::{
     index_location::IndexLocation,
     model::{
         IndexName, IndexPublisher, InterchangeProjectUsageRaw, InterchangeProjectValidationError,
-        KERML_SPEC_PREFIX, KerMlChecksumAlg, SYSML_SPEC_PREFIX,
+        KERML_SPEC_PREFIX, KerMlChecksumAlg, MetamodelKind, MetamodelParseError, SYSML_SPEC_PREFIX,
+        SpecKind,
     },
     project::{
         ProjectRead as _,
@@ -1366,24 +1367,24 @@ pub fn prepare_publish_payload(path: &Utf8Path) -> Result<PublishPreparation, Pu
 /// `Ok(_)` - valid SysML/KerML metamodel
 /// `Err` - invalid SysML/KerML or other
 fn check_metamodel(metamodel: &str) -> Result<AllowedMetamodelKind, PublishError> {
-    for (prefix, kind) in [
-        (SYSML_SPEC_PREFIX, AllowedMetamodelKind::SysML),
-        (KERML_SPEC_PREFIX, AllowedMetamodelKind::KerML),
-    ] {
-        if let Some(metamodel_version) = metamodel.strip_prefix(prefix) {
-            if is_valid_metamodel_version(metamodel_version) {
-                return Ok(kind);
-            } else {
-                return Err(PublishError::InvalidMetamodelVersion {
-                    metamodel: metamodel.into(),
-                    version: metamodel_version.into(),
-                });
-            }
-        }
+    let kind = MetamodelKind::parse(metamodel).map_err(|e| match e {
+        MetamodelParseError::Unrecognized => PublishError::UnsupportedMetamodel {
+            metamodel: metamodel.to_owned(),
+        },
+        MetamodelParseError::InvalidDate { date } => PublishError::InvalidMetamodelVersion {
+            metamodel: metamodel.into(),
+            version: date.into(),
+        },
+    })?;
+    // A release the specification would accept can still be one no index
+    // release ever used.
+    if !is_valid_metamodel_version(kind.date()) {
+        return Err(PublishError::InvalidMetamodelVersion {
+            metamodel: metamodel.into(),
+            version: kind.date().into(),
+        });
     }
-    Err(PublishError::UnsupportedMetamodel {
-        metamodel: metamodel.to_owned(),
-    })
+    Ok(kind.spec().into())
 }
 
 /// Maps an HTTP status and body to a `PublishResponse` or `PublishError`.
@@ -1640,6 +1641,15 @@ fn is_valid_metamodel_version(v: &str) -> bool {
 pub enum AllowedMetamodelKind {
     SysML,
     KerML,
+}
+
+impl From<SpecKind> for AllowedMetamodelKind {
+    fn from(spec: SpecKind) -> Self {
+        match spec {
+            SpecKind::SysMl => Self::SysML,
+            SpecKind::KerMl => Self::KerML,
+        }
+    }
 }
 
 impl AllowedMetamodelKind {
