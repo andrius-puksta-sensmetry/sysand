@@ -9,6 +9,7 @@ use pyo3::{FromPyObject, IntoPyObject};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::manifest::diagnostics::{KeyLocation, ReadWarning};
 use crate::model::MetamodelKind;
 use crate::project::utils::{FsIoError, wrapfs};
 
@@ -75,8 +76,14 @@ impl TryFrom<WorkspaceInfoRaw> for WorkspaceInfo {
                 let metamodel = raw_meta
                     .metamodel
                     .map(|m| {
-                        if let Err(e) = MetamodelKind::parse(&m) {
-                            log::warn!("workspace uses an unknown metamodel `{m}`: {e}");
+                        if MetamodelKind::parse(&m).is_err() {
+                            log::warn!(
+                                "{}",
+                                ReadWarning::UnknownMetamodel {
+                                    location: KeyLocation::File(".workspace.json".to_owned()),
+                                    value: m.clone(),
+                                }
+                            );
                         }
                         Iri::parse(m)
                             .map_err(|(e, iri)| WorkspaceValidationError::InvalidIri(iri, e))

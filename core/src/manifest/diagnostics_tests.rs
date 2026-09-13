@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::manifest::diagnostics::{Diagnostic, Position, ReadWarning, Report, Severity};
+use crate::manifest::diagnostics::{
+    Diagnostic, KeyLocation, Position, ReadWarning, Report, Severity, missing_key,
+};
 use crate::model::MetamodelFamily;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -26,7 +28,9 @@ fn unknown_keys_are_kept_as_warnings_not_errors() {
     assert_eq!(table.unknown.iter().collect::<Vec<_>>(), ["aaa", "zzz"]);
     assert!(!table.unknown.is_empty());
 
-    let warnings = table.unknown.warnings("project");
+    let warnings = table
+        .unknown
+        .warnings(&KeyLocation::Table("project".to_owned()));
     assert_eq!(warnings.len(), 2);
     assert_eq!(warnings[0].to_string(), "unknown key `aaa` in `[project]`");
 }
@@ -46,21 +50,21 @@ fn unknown_keys_serializes_to_nothing() {
 #[test]
 fn unknown_key_warning_texts() {
     let in_table = ReadWarning::UnknownKey {
-        table: "project".to_owned(),
+        location: KeyLocation::Table("project".to_owned()),
         key: "shiny".to_owned(),
         unrecognized_metamodel: None,
     };
     assert_eq!(in_table.to_string(), "unknown key `shiny` in `[project]`");
 
     let top_level = ReadWarning::UnknownKey {
-        table: String::new(),
+        location: KeyLocation::TopLevel,
         key: "shiny".to_owned(),
         unrecognized_metamodel: None,
     };
     assert_eq!(top_level.to_string(), "unknown top-level key `shiny`");
 
     let unsupported = ReadWarning::UnknownKey {
-        table: "project".to_owned(),
+        location: KeyLocation::Table("project".to_owned()),
         key: "shiny".to_owned(),
         unrecognized_metamodel: Some("https://example.com/spec/Other/1".to_owned()),
     };
@@ -75,7 +79,7 @@ fn unknown_key_warning_texts() {
 #[test]
 fn foreign_schema_key_warning_text() {
     let warning = ReadWarning::ForeignSchemaKey {
-        table: "project".to_owned(),
+        location: KeyLocation::Table("project".to_owned()),
         key: "root".to_owned(),
         supported_by: MetamodelFamily::Syside,
     };
@@ -89,7 +93,7 @@ fn foreign_schema_key_warning_text() {
 #[test]
 fn unknown_metamodel_warning_text() {
     let warning = ReadWarning::UnknownMetamodel {
-        table: "project".to_owned(),
+        location: KeyLocation::Table("project".to_owned()),
         value: "https://example.com/spec/Other/1".to_owned(),
     };
     assert_eq!(
@@ -176,7 +180,7 @@ fn report_display_lists_every_diagnostic() {
 #[test]
 fn read_warnings_become_warning_diagnostics() {
     let warning = ReadWarning::UnknownMetamodel {
-        table: "project".to_owned(),
+        location: KeyLocation::Table("project".to_owned()),
         value: "https://example.com/x".to_owned(),
     };
     let positioned = warning.clone().at(Position::at("model.toml", 4, 2));
@@ -189,4 +193,28 @@ fn read_warnings_become_warning_diagnostics() {
     let plain = Diagnostic::from(warning);
     assert_eq!(plain.severity, Severity::Warning);
     assert!(plain.position.is_none());
+}
+
+/// Appendix A row 1, for both manifest formats: a `model.toml` names the
+/// table, a json manifest names the file.
+#[test]
+fn missing_key_names_its_location_and_the_metamodel() {
+    assert_eq!(
+        missing_key("name", &KeyLocation::Table("project".to_owned()), None).to_string(),
+        "missing key `name` in `[project]`"
+    );
+    assert_eq!(
+        missing_key("index", &KeyLocation::File(".meta.json".to_owned()), None).to_string(),
+        "missing key `index` in `.meta.json`"
+    );
+    assert_eq!(
+        missing_key(
+            "index",
+            &KeyLocation::File(".meta.json".to_owned()),
+            Some("https://example.com/x")
+        )
+        .to_string(),
+        "missing key `index` in `.meta.json`; this may be because the project uses a metamodel \
+         this version of Sysand does not support: `https://example.com/x`"
+    );
 }
