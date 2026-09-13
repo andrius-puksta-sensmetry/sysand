@@ -17,6 +17,8 @@ use std::hash::Hash;
 
 use thiserror::Error;
 
+use crate::model::{EffectiveMetamodel, MetamodelFamily};
+
 /// A directed graph of projects, with an edge from a dependent to each of
 /// its dependencies.
 ///
@@ -297,6 +299,74 @@ pub struct DependencyCycle<N: Display> {
     pub component: Vec<N>,
     /// One cycle, starting and ending at the same project.
     pub path: Vec<N>,
+}
+
+/// model-toml.md "Metamodel", direction rule: "an OMG-metamodel project
+/// must not depend on a Syside-metamodel project. This is an error".
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+#[error(
+    "`{dependent}` uses {} and cannot depend on `{dependency}`, which uses {}; only \
+     Syside-metamodel projects may depend on Syside-metamodel projects",
+    dependent_metamodel.describe(),
+    dependency_metamodel.describe()
+)]
+pub struct MetamodelDirectionError<N> {
+    pub dependent: N,
+    pub dependent_metamodel: EffectiveMetamodel,
+    pub dependency: N,
+    pub dependency_metamodel: EffectiveMetamodel,
+}
+
+/// model-toml.md "Metamodel", release rule: "a `<date>` that differs
+/// between a project and one of its dependencies is a warning".
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+#[error(
+    "`{dependent}` targets metamodel release `{dependent_date}` but its dependency \
+     `{dependency}` targets `{dependency_date}`"
+)]
+pub struct MetamodelReleaseMismatch<N> {
+    pub dependent: N,
+    pub dependent_date: String,
+    pub dependency: N,
+    pub dependency_date: String,
+}
+
+/// Both metamodel rules for one edge of a dependency graph.
+///
+/// They run for every edge, once before the lockfile is written and again
+/// when the lockfile is validated. Only the date is compared, across
+/// families and specification kinds.
+pub fn check_metamodel_pair<N: Clone + Debug + Display>(
+    dependent: (&N, &EffectiveMetamodel),
+    dependency: (&N, &EffectiveMetamodel),
+) -> Result<Option<MetamodelReleaseMismatch<N>>, MetamodelDirectionError<N>> {
+    let (dependent, dependent_metamodel) = dependent;
+    let (dependency, dependency_metamodel) = dependency;
+
+    if dependent_metamodel.family() == MetamodelFamily::Omg
+        && dependency_metamodel.family() == MetamodelFamily::Syside
+    {
+        return Err(MetamodelDirectionError {
+            dependent: dependent.clone(),
+            dependent_metamodel: dependent_metamodel.clone(),
+            dependency: dependency.clone(),
+            dependency_metamodel: dependency_metamodel.clone(),
+        });
+    }
+
+    Ok(
+        match (dependent_metamodel.date(), dependency_metamodel.date()) {
+            (Some(dependent_date), Some(dependency_date)) if dependent_date != dependency_date => {
+                Some(MetamodelReleaseMismatch {
+                    dependent: dependent.clone(),
+                    dependent_date: dependent_date.to_owned(),
+                    dependency: dependency.clone(),
+                    dependency_date: dependency_date.to_owned(),
+                })
+            }
+            _ => None,
+        },
+    )
 }
 
 fn render_path<N: Display>(path: &[N]) -> String {

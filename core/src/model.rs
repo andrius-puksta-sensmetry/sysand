@@ -225,6 +225,18 @@ impl EffectiveMetamodel {
         }
     }
 
+    /// How a message names this metamodel: "the OMG metamodel `<url>`",
+    /// "no declared metamodel (OMG assumed)" or "the unrecognized
+    /// metamodel `<url>`". Written to follow "uses" in a sentence, so the
+    /// article belongs here rather than in the sentence.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Known(kind) => format!("the {} metamodel `{kind}`", kind.family()),
+            Self::OmgUnknownDate => "no declared metamodel (OMG assumed)".to_owned(),
+            Self::Unrecognized(value) => format!("the unrecognized metamodel `{value}`"),
+        }
+    }
+
     /// The release date, when there is one to compare.
     pub fn date(&self) -> Option<&str> {
         match self {
