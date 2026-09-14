@@ -114,6 +114,20 @@ impl Diagnostic {
         self.position = Some(position);
         self
     }
+
+    /// Attach a position if there is one to attach.
+    ///
+    /// A diagnostic about a key that is *missing* has no key to point at,
+    /// and a manifest that was not read from text has no positions at
+    /// all; both leave the diagnostic where it is rather than inventing
+    /// somewhere for it to be.
+    #[must_use]
+    pub fn at_opt(self, position: Option<Position>) -> Self {
+        match position {
+            Some(position) => self.at(position),
+            None => self,
+        }
+    }
 }
 
 impl Display for Diagnostic {
@@ -170,6 +184,32 @@ impl Report {
 
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.0
+    }
+
+    /// Put the diagnostics in the order the file reads.
+    ///
+    /// Validation finds problems in the order its checks run - field
+    /// order for the keys a table knows, alphabetical order for the ones
+    /// it does not, since [`UnknownKeys`] is a set - and neither is the
+    /// order the reader works through the file in. Sorting once at the
+    /// end of a read is what makes a report with several problems
+    /// something that can be fixed from top to bottom.
+    ///
+    /// The sort is stable, so two diagnostics about the same key keep the
+    /// order the checks found them in, and a diagnostic with no position
+    /// sorts after every diagnostic that has one.
+    pub fn sort_by_position(&mut self) {
+        self.0.sort_by_key(|diagnostic| {
+            diagnostic
+                .position
+                .as_ref()
+                .map_or((1, usize::MAX, usize::MAX), |position| {
+                    match &position.span {
+                        Some(span) => (0, span.start, 0),
+                        None => (0, usize::MAX, position.line),
+                    }
+                })
+        });
     }
 
     /// The end of every validating function: `value` is only produced if
@@ -322,6 +362,9 @@ pub enum KeyLocation {
     Table(String),
     /// The top level of a `model.toml`.
     TopLevel,
+    /// An array of tables of a `model.toml`, named without its brackets
+    /// (`inline-usages`, `workspace.group.legacy.inline-usages`).
+    ArrayTable(String),
     /// A json manifest, named by its file name (`.project.json`).
     File(String),
 }
@@ -330,6 +373,7 @@ impl Display for KeyLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Table(table) => write!(f, "`[{table}]`"),
+            Self::ArrayTable(table) => write!(f, "`[[{table}]]`"),
             Self::TopLevel => f.write_str("the top level"),
             Self::File(file) => write!(f, "`{file}`"),
         }
