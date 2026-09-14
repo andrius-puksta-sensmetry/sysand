@@ -10,6 +10,7 @@
 
 pub mod common;
 pub mod diagnostics;
+pub mod inherit;
 pub mod reader;
 pub mod serde_support;
 pub mod spans;
