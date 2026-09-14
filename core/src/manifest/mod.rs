@@ -12,3 +12,4 @@ pub mod common;
 pub mod diagnostics;
 pub mod serde_support;
 pub mod spans;
+pub mod usage;
