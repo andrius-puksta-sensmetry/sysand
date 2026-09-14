@@ -282,35 +282,6 @@ fn sources_entries_must_be_model_files() {
     );
 }
 
-/// model-toml.md: `sources` "cannot be inherited by a member ..., since
-/// the file layout of one project says nothing about another's".
-#[test]
-fn sources_cannot_be_inherited() {
-    #[derive(Debug, Deserialize)]
-    struct Wrapper {
-        sources: Sources,
-    }
-
-    for marker in [
-        "sources.workspace = true",
-        "sources.workspace = \"legacy\"",
-        "sources.workspace = false",
-        "sources = { workspace = true }",
-    ] {
-        let error = toml_edit::de::from_str::<Wrapper>(&format!("{marker}\n"))
-            .unwrap_err()
-            .to_string();
-        assert!(
-            error.contains("cannot be inherited"),
-            "{marker}: unexpected error: {error}"
-        );
-    }
-
-    let parsed: Wrapper =
-        toml_edit::de::from_str("sources = [\"a.sysml\"]\n").expect("a plain list still parses");
-    assert_eq!(parsed.sources.as_slice().len(), 1);
-}
-
 #[test]
 fn sources_serializes_the_normalized_form() {
     #[derive(Debug, Serialize)]

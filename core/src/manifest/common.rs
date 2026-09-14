@@ -12,7 +12,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use typed_path::Utf8UnixPathBuf;
 
-use crate::manifest::serde_support::PathValue;
 use crate::model::{normalize_typed_name, normalize_typed_publisher};
 use crate::purl::{PKG_SYSAND_PREFIX, is_valid_unnormalized_name, is_valid_unnormalized_publisher};
 use crate::symbols::Language;
@@ -447,9 +446,11 @@ pub enum SourcesError {
 ///
 /// `sources` "is per-project only: it cannot appear in `[workspace]` and
 /// cannot be inherited by a member ..., since the file layout of one
-/// project says nothing about another's". The hand-written `Deserialize`
-/// is what turns an attempted `sources.workspace = true` into that
-/// explanation rather than a bare type error.
+/// project says nothing about another's". Refusing an attempted
+/// `sources.workspace = true` with that explanation belongs to whoever
+/// reads the table -- [`crate::manifest::project`] for `[project]`,
+/// [`crate::manifest::workspace_table`] for a group -- since only a
+/// reader knows where the key was written.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Sources(Vec<Utf8UnixPathBuf>);
 
@@ -516,26 +517,6 @@ impl Sources {
 impl Serialize for Sources {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_seq(self.0.iter().map(|path| path.as_str()))
-    }
-}
-
-impl<'de> Deserialize<'de> for Sources {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Raw {
-            List(Vec<PathValue>),
-            Inherited(#[expect(dead_code)] InheritMarkerTable),
-        }
-
-        match Raw::deserialize(deserializer)? {
-            Raw::List(paths) => Self::new(paths.into_iter().map(|p| p.0).collect())
-                .map_err(serde::de::Error::custom),
-            Raw::Inherited(_) => Err(serde::de::Error::custom(
-                "`sources` is per-project and cannot be inherited from the workspace: \
-                 every member writes out its own source files in full",
-            )),
-        }
     }
 }
 
