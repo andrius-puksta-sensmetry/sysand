@@ -128,6 +128,18 @@ impl<'a> TableReader<'a> {
         self.positions.near(&self.segments(&[]))
     }
 
+    /// Where one element of an array-valued key is.
+    pub fn at_element(&self, key: &str, index: usize) -> Option<Position> {
+        self.positions
+            .near(&self.segments(&[key, &index.to_string()]))
+    }
+
+    /// The positions this table was read against, for the readers that
+    /// hand them on (a usage entry carries its own site).
+    pub fn positions(&self) -> &'a Positions<'a> {
+        self.positions
+    }
+
     /// One warning per key the caller did not ask for (workspaces.md
     /// "Unknown keys"), each at its own key. `metamodel` carries
     /// appendix A row 1's suffix: an unrecognized metamodel may be why
