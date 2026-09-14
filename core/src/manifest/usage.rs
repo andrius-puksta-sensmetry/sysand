@@ -9,10 +9,11 @@
 //! declares ([`MemberUsage`]), or in a workspace group's array, where it
 //! is always declared ([`Usage`]).
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 
 use fluent_uri::Iri;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use typed_path::Utf8UnixPathBuf;
 
 use crate::manifest::common::InheritMarker;
@@ -20,6 +21,7 @@ use crate::manifest::common::{
     InheritFrom, Name, NormalizedIdentity, Publisher, normalized_identity,
 };
 use crate::manifest::diagnostics::{Diagnostic, KeyLocation, Report, UnknownKeys, missing_key};
+use crate::manifest::reader::describe;
 use crate::manifest::spans::Positions;
 
 /// Appendix A row 7: the keys a usage entry accepts, quoted as the
@@ -297,7 +299,13 @@ fn borrowed(segments: &[String]) -> Vec<&str> {
 /// `git`, `rev`, `tag` and `branch` are fields rather than unknown keys
 /// because model-toml.md names the git kind and postpones it; a reader
 /// that called them unknown would say they will never exist.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Read from a [`toml::Table`] rather than through `Deserialize`
+/// ([`UsageRaw::from_table`]): a derive fails the whole file on the first
+/// value of the wrong TOML type, which is the one thing "reports every
+/// problem it finds in one report" does not allow. `Serialize` stays:
+/// WP-3 writes a usage back out through `From<Usage>`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct UsageRaw {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub publisher: Option<String>,
@@ -329,9 +337,73 @@ pub struct UsageRaw {
     /// accepted.
     #[serde(flatten)]
     pub unknown: UnknownKeys,
+    /// The keys that were written with a value of the wrong TOML type,
+    /// each with the type that was found there.
+    ///
+    /// The value itself is gone, so what such an entry declares cannot be
+    /// decided from what is left: an entry with one of these is refused
+    /// without asking it for a kind, which would otherwise report a
+    /// wrong-typed `dir` as an index usage that is missing its `version`.
+    #[serde(skip)]
+    pub wrong_typed: BTreeMap<String, &'static str>,
 }
 
 impl UsageRaw {
+    /// Read one entry out of the values a `model.toml` parsed into.
+    ///
+    /// Nothing is judged here and nothing is reported: this takes what
+    /// has the right shape, remembers what does not, and leaves every
+    /// diagnostic to [`UsageRaw::validate_member`], which is the one
+    /// place that decides what an entry means.
+    pub fn from_table(table: &toml::Table) -> Self {
+        let mut raw = Self::default();
+        let mut strings: BTreeMap<&str, String> = BTreeMap::new();
+        let mut unknown: BTreeSet<String> = BTreeSet::new();
+
+        for (key, value) in table {
+            match key.as_str() {
+                "publisher" | "name" | "version" | "dir" | "kpar-path" | "url" | "git" | "rev"
+                | "tag" | "branch" => match value.as_str() {
+                    Some(text) => {
+                        strings.insert(key.as_str(), text.to_owned());
+                    }
+                    None => {
+                        raw.wrong_typed.insert(key.clone(), describe(value));
+                    }
+                },
+                // The one key of an entry that is neither a string nor a
+                // table: a marker is a bool or a group name.
+                "workspace" => match value {
+                    toml::Value::Boolean(flag) => {
+                        raw.workspace = Some(InheritMarker::Flag(*flag));
+                    }
+                    toml::Value::String(group) => {
+                        raw.workspace = Some(InheritMarker::Group(group.clone()));
+                    }
+                    _ => {
+                        raw.wrong_typed.insert(key.clone(), describe(value));
+                    }
+                },
+                _ => {
+                    unknown.insert(key.clone());
+                }
+            }
+        }
+
+        raw.publisher = strings.remove("publisher");
+        raw.name = strings.remove("name");
+        raw.version = strings.remove("version");
+        raw.dir = strings.remove("dir");
+        raw.kpar_path = strings.remove("kpar-path");
+        raw.url = strings.remove("url");
+        raw.git = strings.remove("git");
+        raw.rev = strings.remove("rev");
+        raw.tag = strings.remove("tag");
+        raw.branch = strings.remove("branch");
+        raw.unknown = unknown.into_iter().collect();
+        raw
+    }
+
     /// The entry as the messages name it: `<publisher>/<name>` as
     /// written, with `<none>` for a half that is missing.
     pub fn label(&self) -> String {
@@ -410,6 +482,20 @@ impl UsageRaw {
             );
         }
 
+        for (key, found) in &self.wrong_typed {
+            let expected = if key == "workspace" {
+                "a boolean or a string"
+            } else {
+                "a string"
+            };
+            report.push(
+                Diagnostic::error(format!(
+                    "`{key}` in usage `{label}` must be {expected}, but it is {found}"
+                ))
+                .at_opt(site.key(key, positions)),
+            );
+        }
+
         let name = self.checked_name(site, positions, &mut report);
         let publisher = self.checked_publisher(site, positions, &mut report, name.as_ref());
 
@@ -418,7 +504,11 @@ impl UsageRaw {
         // itself turns out to be invalid, and one declaring the postponed
         // git kind is not an index usage -- so neither is then asked for
         // the `version` an index usage needs.
-        let member = if self.workspace.is_some() {
+        let member = if !self.wrong_typed.is_empty() {
+            // The values are gone, so there is nothing left to decide a
+            // shape from.
+            None
+        } else if self.workspace.is_some() {
             let from = self.checked_marker(site, positions, &mut report, marker_allowed, &label);
             from.and_then(|from| {
                 self.check_opt_in_is_bare(site, positions, &mut report, &label, &from);
@@ -456,6 +546,9 @@ impl UsageRaw {
         report: &mut Report,
     ) -> Option<Name> {
         let Some(raw) = self.name.as_deref() else {
+            if self.wrong_typed.contains_key("name") {
+                return None;
+            }
             report.push(
                 missing_key(
                     "name",
@@ -484,6 +577,9 @@ impl UsageRaw {
         name: Option<&Name>,
     ) -> Option<Publisher> {
         let Some(raw) = self.publisher.as_deref() else {
+            if self.wrong_typed.contains_key("publisher") {
+                return None;
+            }
             // Appendix A row 9 names the usage by its name, so with no
             // name there is nothing to say but that the key is missing.
             report.push(match name {
