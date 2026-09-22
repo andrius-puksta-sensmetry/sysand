@@ -1244,3 +1244,54 @@ fn compression_method(compression: Option<&str>) -> Result<(), Box<dyn std::erro
     assert_eq!(src, "package P;\n");
     Ok(())
 }
+
+/// The interchange project JSON schema leaves `additionalProperties` at its
+/// default in both `Project` and `Meta`, so a producer may put its own
+/// properties in `.project.json` and `.meta.json`, and every Sysand command
+/// that edits those files in place keeps them (`LocalSrcProject::
+/// edit_info_document` says so explicitly).
+///
+/// `build` is the exception: it packages the files through the typed
+/// `InterchangeProject{Info,Metadata}Raw` model, so anything the model does
+/// not name is dropped from the copies inside the KPAR. Publishing a project
+/// therefore loses properties that working on it preserves.
+#[test]
+#[should_panic(expected = "`build` dropped an unknown property")]
+fn build_preserves_unknown_properties() {
+    let (_temp_dir, cwd, out) = cli_init_project_basic("a", "test_build", "1.2.3").unwrap();
+    out.assert().success();
+
+    // Add a property of our own to each file, next to what `init` wrote.
+    for (file, key) in [
+        (".project.json", "vendorExtension"),
+        (".meta.json", "vendorExtension"),
+    ] {
+        let path = cwd.join(file);
+        let mut doc: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        doc.as_object_mut()
+            .unwrap()
+            .insert(key.to_owned(), json!({ "kept": true }));
+        fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+    }
+
+    run_sysand_in(&cwd, ["build", "./test_build.kpar"], None)
+        .unwrap()
+        .assert()
+        .success();
+
+    let kpar = zip::ZipArchive::new(fs::File::open(cwd.join("test_build.kpar")).unwrap()).unwrap();
+    let mut kpar = kpar;
+    for file in [".project.json", ".meta.json"] {
+        let mut contents = String::new();
+        kpar.by_name(file)
+            .unwrap()
+            .read_to_string(&mut contents)
+            .unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        assert!(
+            doc.get("vendorExtension").is_some(),
+            "`build` dropped an unknown property from `{file}`:\n{contents}"
+        );
+    }
+}
