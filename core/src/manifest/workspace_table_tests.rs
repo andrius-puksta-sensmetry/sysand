@@ -623,7 +623,7 @@ fn a_default_group_usage_is_declared() {
     let usages = &table.default_group.inline_usages;
     assert_eq!(usages.len(), 1);
     assert!(
-        matches!(&usages[0], Usage::Index { name, .. } if name.as_str() == "shared-dep"),
+        matches!(&usages[0], Usage::Index { name, publisher: _, version_constraint: _ } if name.as_str() == "shared-dep"),
         "unexpected usage: {:?}",
         usages[0]
     );
@@ -640,7 +640,7 @@ fn a_named_group_usage_is_declared() {
     assert!(
         matches!(
             &usages[0],
-            Usage::SourcePath { name, dir, .. }
+            Usage::SourcePath { name, dir, publisher: _ }
                 if name.as_str() == "legacy-dep" && dir.as_str() == "legacy/dep"
         ),
         "unexpected usage: {:?}",

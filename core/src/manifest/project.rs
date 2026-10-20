@@ -408,7 +408,7 @@ fn sources_position(
     error: &SourcesError,
 ) -> Option<Position> {
     let (entry, last) = match error {
-        SourcesError::Duplicate { second, .. } => (second.as_str(), true),
+        SourcesError::Duplicate { second, first: _ } => (second.as_str(), true),
         SourcesError::NotRelative(entry)
         | SourcesError::ContainsBackslash(entry)
         | SourcesError::ContainsNull(entry)
@@ -545,10 +545,17 @@ impl ProjectManifest {
                         || marked(urls.repository.as_ref())
                 }
             })
-            || self
-                .inline_usages
-                .iter()
-                .any(|usage| matches!(usage, MemberUsage::Inherited { .. }))
+            || self.inline_usages.iter().any(|usage| {
+                matches!(
+                    usage,
+                    MemberUsage::Inherited {
+                        publisher: _,
+                        name: _,
+                        from: _,
+                        at: _
+                    }
+                )
+            })
     }
 
     /// workspaces.md "Explicit inheritance" and "Common usages": follow

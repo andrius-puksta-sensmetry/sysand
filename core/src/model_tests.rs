@@ -1034,6 +1034,17 @@ fn a_null_list_is_an_empty_list() {
         .validate(".project.json", None)
         .expect("a null list is a list of nothing");
 
-    assert!(validated.value.usage.is_empty());
-    assert!(validated.value.maintainer.is_empty());
+    assert_eq!(
+        validated.value.usage,
+        [] as [crate::model::InterchangeProjectUsageG<
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String,
+        >; 0]
+    );
+    assert_eq!(validated.value.maintainer, [] as [std::string::String; 0]);
 }
