@@ -737,7 +737,7 @@ fn check_metamodel_preserves_the_rejections_of_0_2_x() {
     ] {
         assert_matches!(
             check_metamodel(metamodel).unwrap_err(),
-            PublishError::UnsupportedMetamodel { .. },
+            PublishError::UnsupportedMetamodel { metamodel: _ },
             "{metamodel} should be unsupported"
         );
     }

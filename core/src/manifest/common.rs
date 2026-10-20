@@ -461,19 +461,19 @@ impl Sources {
                 return Err(SourcesError::IsDirectory(raw.to_owned()));
             }
             let path = normalize_relative(raw).map_err(|e| match e {
-                NormalizeRelativeError::Absolute { .. } => {
+                NormalizeRelativeError::Absolute { path: _ } => {
                     SourcesError::NotRelative(raw.to_owned())
                 }
-                NormalizeRelativeError::ContainsBackslash { .. } => {
+                NormalizeRelativeError::ContainsBackslash { path: _ } => {
                     SourcesError::ContainsBackslash(raw.to_owned())
                 }
-                NormalizeRelativeError::ContainsNull { .. } => {
+                NormalizeRelativeError::ContainsNull { path: _ } => {
                     SourcesError::ContainsNull(raw.to_owned())
                 }
-                NormalizeRelativeError::EscapesRoot { .. } => {
+                NormalizeRelativeError::EscapesRoot { path: _ } => {
                     SourcesError::EscapesRoot(raw.to_owned())
                 }
-                NormalizeRelativeError::IsRoot { .. } => SourcesError::IsRoot(raw.to_owned()),
+                NormalizeRelativeError::IsRoot { path: _ } => SourcesError::IsRoot(raw.to_owned()),
             })?;
             if !seen.insert(path.clone()) {
                 let first = normalized
