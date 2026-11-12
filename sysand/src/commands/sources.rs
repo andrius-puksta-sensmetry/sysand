@@ -110,7 +110,7 @@ pub fn command_sources_workspace(
     ctx: ProjectContext,
 ) -> Result<()> {
     use std::collections::HashSet;
-    use sysand_core::project::{ProjectDefinition, local_src::LocalSrcProject};
+    use sysand_core::project::{ProjectDefinition, expanded_sources, local_src::LocalSrcProject};
 
     let workspace = ctx.workspace().expect("a workspace root means a workspace");
 
@@ -147,7 +147,7 @@ pub fn command_sources_workspace(
     for member in workspace.members() {
         let project = LocalSrcProject::new_member(member.dir.clone(), None, table.clone());
 
-        for source in member.project.sources()?.iter() {
+        for source in expanded_sources(&project, member.project.sources()?)? {
             let rendered = project.get_source_path(source)?.to_string();
             own.insert(rendered.clone());
             if seen.insert(rendered.clone()) {

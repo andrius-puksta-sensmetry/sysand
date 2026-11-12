@@ -1133,6 +1133,108 @@ fn build_toml_project_with_a_missing_target() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+/// A wildcard `sources` entry packages every file it matches, and the
+/// `checksum` and `index` maps are keyed by the matched paths, in entry
+/// order with each entry's matches sorted.
+#[test]
+fn build_toml_project_with_wildcard_sources() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp_dir, cwd) = new_temp_cwd()?;
+    write_toml_project(
+        &cwd,
+        "widgets",
+        "1.0.0",
+        "sources = [\"Main.sysml\", \"lib/*.kerml\", \"*/Extra*.sysml\"]\n\
+            metamodel = \"https://www.omg.org/spec/SysML/20250201\"\n",
+    )?;
+    std::fs::create_dir_all(cwd.join("lib/nested"))?;
+    std::fs::create_dir_all(cwd.join("more"))?;
+    std::fs::write(cwd.join("Main.sysml"), b"package Main;\n")?;
+    std::fs::write(cwd.join("lib/B.kerml"), b"package B;\n")?;
+    std::fs::write(cwd.join("lib/A.kerml"), b"package A;\n")?;
+    std::fs::write(cwd.join("lib/notes.txt"), b"not a model\n")?;
+    std::fs::write(cwd.join("lib/nested/C.kerml"), b"package C;\n")?;
+    std::fs::write(cwd.join("more/Extra1.sysml"), b"package Extra1;\n")?;
+    std::fs::write(cwd.join("lib/ExtraLib.sysml"), b"package ExtraLib;\n")?;
+
+    run_sysand_in(&cwd, ["build"], None)?.assert().success();
+
+    let kpar = cwd.join("output/acme_widgets_1.0.0.kpar");
+    let meta: InterchangeProjectMetadataRaw =
+        serde_json::from_str(&read_kpar_file(&kpar, ".meta.json"))?;
+    let checksummed: Vec<&str> = meta
+        .checksum
+        .as_ref()
+        .expect("a built toml project has checksums")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        checksummed,
+        [
+            "Main.sysml",
+            "lib/A.kerml",
+            "lib/B.kerml",
+            "lib/ExtraLib.sysml",
+            "more/Extra1.sysml"
+        ]
+    );
+    let index = meta
+        .index
+        .as_ref()
+        .expect("a built toml project has an index");
+    assert_eq!(index.get("C"), None, "`*` does not cross `/`");
+    assert_eq!(
+        index.get("ExtraLib").map(String::as_str),
+        Some("lib/ExtraLib.sysml")
+    );
+    assert_eq!(read_kpar_file(&kpar, "lib/A.kerml"), "package A;\n");
+    Ok(())
+}
+
+/// A wildcard entry that matches nothing fails the build.
+#[test]
+fn build_toml_project_with_an_unmatched_wildcard() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp_dir, cwd) = new_temp_cwd()?;
+    write_toml_project(
+        &cwd,
+        "widgets",
+        "1.0.0",
+        "sources = [\"a.sysml\", \"lib/*.sysml\"]\n\
+            metamodel = \"https://www.omg.org/spec/SysML/20250201\"\n",
+    )?;
+    std::fs::write(cwd.join("a.sysml"), b"package A;\n")?;
+
+    run_sysand_in(&cwd, ["build"], None)?
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "`sources` entry `lib/*.sysml` matches no file",
+        ));
+    Ok(())
+}
+
+/// A file named by a wildcard entry and another entry fails the build.
+#[test]
+fn build_toml_project_with_overlapping_entries() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp_dir, cwd) = new_temp_cwd()?;
+    write_toml_project(
+        &cwd,
+        "widgets",
+        "1.0.0",
+        "sources = [\"a.sysml\", \"*.sysml\"]\n\
+            metamodel = \"https://www.omg.org/spec/SysML/20250201\"\n",
+    )?;
+    std::fs::write(cwd.join("a.sysml"), b"package A;\n")?;
+
+    run_sysand_in(&cwd, ["build"], None)?
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "`a.sysml` is named by both `sources` entry `a.sysml` and `*.sysml`",
+        ));
+    Ok(())
+}
+
 /// A standard-library usage is a publisher-less `kpar-url`, and
 /// reaches the archive as the IRI it already names.
 #[test]

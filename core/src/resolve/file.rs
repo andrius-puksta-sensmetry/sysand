@@ -420,6 +420,17 @@ impl ProjectRead for FileResolverProject {
             Self::LocalKParProject(proj) => proj.project_root(),
         }
     }
+    fn list_source_dir(
+        &self,
+        dir: &typed_path::Utf8UnixPath,
+    ) -> Result<Option<Vec<crate::manifest::common::SourceDirEntry>>, Self::Error> {
+        match self {
+            Self::LocalSrcProject(proj) => proj
+                .list_source_dir(dir)
+                .map_err(FileResolverProjectError::LocalSrc),
+            Self::LocalKParProject(_) => Ok(None),
+        }
+    }
 }
 
 impl ResolveRead for FileResolver {

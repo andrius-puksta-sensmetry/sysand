@@ -19,13 +19,19 @@ use utils::FsIoError;
 pub use sysand_macros::ProjectMut;
 pub use sysand_macros::ProjectRead;
 pub use typed_path::Utf8UnixPath;
+use typed_path::Utf8UnixPathBuf;
 
 use crate::{
     cancel::{Bridge, Cancellable, CancellationToken},
     context::ProjectContext,
     env::utils::ErrorBound,
     lock::Source,
-    manifest::{MODEL_TOML_FILE, edit::DocumentMut, project::ResolvedProject},
+    manifest::{
+        MODEL_TOML_FILE,
+        common::{ExpandError, ExpandProblem, SourceDirEntry, Sources},
+        edit::DocumentMut,
+        project::ResolvedProject,
+    },
     model::{
         InterchangeProjectChecksumRaw, InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw,
         InterchangeProjectUsage, InterchangeProjectUsageRaw, InterchangeProjectValidationError,
@@ -474,6 +480,17 @@ pub enum SourceSymbolsError {
     Symbols(#[from] crate::symbols::SymbolsError),
     #[error(transparent)]
     Unlisted(#[from] crate::manifest::project::UnlistedFiles),
+    #[error(transparent)]
+    Sources(#[from] ExpandProblem),
+}
+
+/// The source files `sources` names, with each wildcard entry expanded
+/// against `project`'s files.
+pub fn expanded_sources<P: ProjectRead + ?Sized>(
+    project: &P,
+    sources: &Sources,
+) -> Result<Vec<Utf8UnixPathBuf>, ExpandError<P::Error>> {
+    sources.expand(|dir| project.list_source_dir(dir))
 }
 
 /// Every top-level symbol a `model.toml` project's sources declare,
@@ -487,8 +504,12 @@ pub fn symbol_index<P: ProjectRead + ?Sized>(
     let sources = manifest
         .sources()
         .map_err(|e| SymbolIndexError::Source(e.into()))?;
+    let sources = expanded_sources(project, sources).map_err(|e| match e {
+        ExpandError::List(e) => SymbolIndexError::Project(e),
+        ExpandError::Problem(problem) => SourceSymbolsError::from(problem).into(),
+    })?;
     crate::manifest::kpar_view::symbol_index(
-        sources,
+        &sources,
         |source| {
             let mut contents = String::new();
             project
@@ -503,7 +524,6 @@ pub fn symbol_index<P: ProjectRead + ?Sized>(
     .map_err(|e| match e {
         crate::manifest::kpar_view::ViewError::Read(e) => e,
         crate::manifest::kpar_view::ViewError::Symbols(e) => SourceSymbolsError::from(e).into(),
-        crate::manifest::kpar_view::ViewError::Unlisted(e) => SourceSymbolsError::from(e).into(),
     })
 }
 
@@ -657,6 +677,17 @@ pub trait ProjectRead {
     /// It is used, among other things, to resolve relative path usages. Such
     /// usages will fail resolution if `None` is returned here
     fn project_root(&self) -> Option<&Utf8Path>;
+
+    /// The entries of `dir`, a directory relative to the project root,
+    /// for expanding wildcard `sources` entries, or `None` when this
+    /// project's files cannot be listed. A missing directory has no
+    /// entries.
+    fn list_source_dir(
+        &self,
+        _dir: &Utf8UnixPath,
+    ) -> Result<Option<Vec<SourceDirEntry>>, Self::Error> {
+        Ok(None)
+    }
 
     /// Which manifest this project is written in.
     ///
@@ -817,6 +848,13 @@ impl<T: ProjectRead> ProjectRead for &T {
     fn project_root(&self) -> Option<&Utf8Path> {
         (*self).project_root()
     }
+
+    fn list_source_dir(
+        &self,
+        dir: &Utf8UnixPath,
+    ) -> Result<Option<Vec<SourceDirEntry>>, Self::Error> {
+        (*self).list_source_dir(dir)
+    }
 }
 
 impl<T: ProjectRead> ProjectRead for &mut T {
@@ -880,6 +918,13 @@ impl<T: ProjectRead> ProjectRead for &mut T {
 
     fn project_root(&self) -> Option<&Utf8Path> {
         (**self).project_root()
+    }
+
+    fn list_source_dir(
+        &self,
+        dir: &Utf8UnixPath,
+    ) -> Result<Option<Vec<SourceDirEntry>>, Self::Error> {
+        (**self).list_source_dir(dir)
     }
 }
 

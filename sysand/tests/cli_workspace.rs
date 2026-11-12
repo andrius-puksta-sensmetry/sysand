@@ -1060,6 +1060,43 @@ fn sources_at_the_root_lists_every_member() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
+/// A wildcard `sources` entry lists the files it matches, for a project
+/// on its own and for a member listed from the workspace root.
+#[test]
+fn sources_lists_the_files_a_wildcard_entry_matches() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = camino_tempfile::tempdir()?;
+    write_workspace_root(dir.path(), &["lib"], "")?;
+    let lib = dir.path().join("lib");
+    std::fs::create_dir_all(lib.join("parts"))?;
+    write_toml_project(
+        &lib,
+        "lib",
+        "1.0.0",
+        "sources = [\"parts/*.sysml\"]\n\
+         metamodel = \"https://www.omg.org/spec/SysML/20250201\"\n",
+    )?;
+    std::fs::write(lib.join("parts/B.sysml"), "package B;\n")?;
+    std::fs::write(lib.join("parts/A.sysml"), "package A;\n")?;
+    std::fs::write(lib.join("parts/notes.txt"), "not a model\n")?;
+
+    let parts = lib.join("parts").canonicalize_utf8()?;
+    for at in [dir.path(), lib.as_path()] {
+        let out = run_sysand_in(at, ["sources", "--deps", "none"], None)?;
+        out.clone().assert().success();
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        let listed: Vec<&str> = stdout.lines().collect();
+        assert_eq!(
+            listed,
+            [
+                parts.join("A.sysml").as_str(),
+                parts.join("B.sysml").as_str()
+            ],
+            "from `{at}`"
+        );
+    }
+    Ok(())
+}
+
 /// An intra-workspace usage resolves to the member itself, so `lib`'s own
 /// file is reached both as its own source and as `app`'s dependency. It is
 /// listed once.

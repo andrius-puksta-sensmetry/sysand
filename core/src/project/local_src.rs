@@ -18,7 +18,12 @@ use indexmap::IndexMap;
 use crate::{
     context::ProjectContext,
     lock::Source,
-    manifest::{MODEL_TOML_FILE, ParsedModelToml, kpar_view, project::ResolvedProject},
+    manifest::{
+        MODEL_TOML_FILE, ParsedModelToml,
+        common::{SourceDirEntry, SourceDirEntryKind},
+        kpar_view,
+        project::ResolvedProject,
+    },
     model::{
         InterchangeProjectInfoPartial, InterchangeProjectInfoRaw,
         InterchangeProjectMetadataPartial, InterchangeProjectMetadataRaw, META_JSON_FILE,
@@ -535,6 +540,49 @@ impl ProjectRead for LocalSrcProject {
 
     fn project_root(&self) -> Option<&Utf8Path> {
         Some(&self.project_path)
+    }
+
+    fn list_source_dir(
+        &self,
+        dir: &Utf8UnixPath,
+    ) -> Result<Option<Vec<SourceDirEntry>>, LocalSrcError> {
+        let mut path = self.project_path.clone();
+        if !dir.as_str().is_empty() {
+            path.extend(dir.as_str().split('/'));
+        }
+        let entries = match path.read_dir_utf8() {
+            Ok(entries) => entries,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+                ) =>
+            {
+                return Ok(Some(Vec::new()));
+            }
+            Err(error) => return Err(FsIoError::ReadDir(path, error).into()),
+        };
+        let mut listed = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|error| FsIoError::ReadDir(path.clone(), error))?;
+            let kind = match std::fs::metadata(entry.path()) {
+                Ok(metadata) if metadata.is_file() => SourceDirEntryKind::File,
+                Ok(metadata) if metadata.is_dir() => SourceDirEntryKind::Directory,
+                Ok(_) => SourceDirEntryKind::Other,
+                // A broken symbolic link.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    SourceDirEntryKind::Other
+                }
+                Err(error) => {
+                    return Err(FsIoError::Metadata(entry.path().to_owned(), error).into());
+                }
+            };
+            listed.push(SourceDirEntry {
+                name: entry.file_name().to_owned(),
+                kind,
+            });
+        }
+        Ok(Some(listed))
     }
 
     fn format(&self) -> Result<ProjectFormat, Self::Error> {

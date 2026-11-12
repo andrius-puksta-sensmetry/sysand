@@ -19,12 +19,11 @@
 
 use indexmap::IndexMap;
 use thiserror::Error;
-use typed_path::Utf8UnixPath;
+use typed_path::{Utf8UnixPath, Utf8UnixPathBuf};
 
 use crate::manifest::ModelToml;
-use crate::manifest::common::Sources;
 use crate::manifest::diagnostics::{Diagnostics, Validated};
-use crate::manifest::project::{ProjectManifest, ResolvedProject, UnlistedFiles};
+use crate::manifest::project::{ProjectManifest, ResolvedProject};
 use crate::manifest::usage::Usage;
 use crate::manifest::workspace_table::WorkspaceTable;
 use crate::model::{
@@ -51,8 +50,6 @@ pub enum ViewError<E> {
     Read(E),
     #[error(transparent)]
     Symbols(#[from] SymbolsError),
-    #[error(transparent)]
-    Unlisted(UnlistedFiles),
 }
 
 /// Why a json usage has no `model.toml` form.
@@ -305,8 +302,9 @@ pub fn meta(
 }
 
 /// The two `.meta.json` maps that have no counterpart in `model.toml`,
-/// both computed from the file contents and keyed by the `sources`
-/// entries:
+/// both computed from the contents of the source files `sources` lists
+/// (the `sources` entries with wildcard entries expanded) and keyed by
+/// their paths:
 ///
 /// - `checksum`, an entry per source file, keyed by its path, holding the
 ///   file's SHA256 hash;
@@ -321,7 +319,7 @@ pub fn meta(
 /// A symbol declared in two sources maps to the later one; `index` has
 /// no room for both.
 pub fn source_maps<E>(
-    sources: &Sources,
+    sources: &[Utf8UnixPathBuf],
     read: impl FnMut(&Utf8UnixPath) -> Result<String, E>,
 ) -> Result<(SymbolIndex, ChecksumMap), ViewError<E>> {
     let mut checksum = ChecksumMap::new();
@@ -340,12 +338,12 @@ pub fn source_maps<E>(
 /// The `index` map of [`source_maps`] alone. `each` sees every source
 /// file's contents after `read` hands them over.
 pub fn symbol_index<E>(
-    sources: &Sources,
+    sources: &[Utf8UnixPathBuf],
     mut read: impl FnMut(&Utf8UnixPath) -> Result<String, E>,
     mut each: impl FnMut(&Utf8UnixPath, &str),
 ) -> Result<SymbolIndex, ViewError<E>> {
     let mut index = SymbolIndex::new();
-    for source in sources.iter() {
+    for source in sources {
         let contents = read(source).map_err(ViewError::Read)?;
         each(source, &contents);
         for symbol in top_level_symbols(&source, &contents, None)? {
@@ -355,13 +353,14 @@ pub fn symbol_index<E>(
     Ok(index)
 }
 
-/// The whole view: [`info`] and [`meta`] over one run of [`source_maps`].
+/// The whole view: [`info`] and [`meta`] over one run of [`source_maps`]
+/// on `sources`, the project's expanded `sources` entries.
 pub fn view<E>(
     project: &ResolvedProject,
+    sources: &[Utf8UnixPathBuf],
     created: &jiff::Timestamp,
     read: impl FnMut(&Utf8UnixPath) -> Result<String, E>,
 ) -> Result<(InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw), ViewError<E>> {
-    let sources = project.sources().map_err(ViewError::Unlisted)?;
     let (index, checksum) = source_maps(sources, read)?;
     Ok((info(project), meta(project, created, index, checksum)))
 }

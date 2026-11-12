@@ -256,8 +256,11 @@ fn reader(files: &BTreeMap<String, String>) -> impl FnMut(&Utf8UnixPath) -> Resu
 }
 
 /// The `sources` of a project the test knows is an OMG one.
-fn omg_sources(project: &ResolvedProject) -> &Sources {
-    project.sources().expect("an OMG-metamodel project")
+fn omg_sources(project: &ResolvedProject) -> &[Utf8UnixPathBuf] {
+    project
+        .sources()
+        .expect("an OMG-metamodel project")
+        .as_slice()
 }
 
 fn maps(body: &str, entries: &[(&str, &str)]) -> (SymbolIndex, ChecksumMap) {
@@ -569,7 +572,13 @@ fn a_project_with_no_sources_gets_two_empty_maps() {
 fn meta_json_from_the_view_validates() {
     let project = resolved(FULL);
     let files = files(&[("a.sysml", "part def A;")]);
-    let (_, meta) = view(&project, &jiff::Timestamp::now(), reader(&files)).expect("readable");
+    let (_, meta) = view(
+        &project,
+        omg_sources(&project),
+        &jiff::Timestamp::now(),
+        reader(&files),
+    )
+    .expect("readable");
     // The strict validator, not the partial one, which accepts a
     // `metamodel` that is no URL and a `created` that is no timestamp.
     meta.validate().expect("a valid `.meta.json`");
@@ -642,7 +651,8 @@ fn the_view_is_the_two_halves() {
     let files = files(&[("a.sysml", "part def A;")]);
     let created = jiff::Timestamp::UNIX_EPOCH;
 
-    let (whole_info, whole_meta) = view(&project, &created, reader(&files)).expect("readable");
+    let (whole_info, whole_meta) =
+        view(&project, omg_sources(&project), &created, reader(&files)).expect("readable");
     let (index, checksum) = source_maps(omg_sources(&project), reader(&files)).expect("readable");
     assert_eq!(whole_info, info(&project));
     assert_eq!(whole_meta, meta(&project, &created, index, checksum));
@@ -818,9 +828,12 @@ fn a_source_project_view_carries_an_empty_checksum_map() {
                 sources = []\n\
                 metamodel = \"https://www.omg.org/spec/SysML/20250201\"\n";
     let project = super::resolved_of_text(MODEL_TOML_FILE, text).expect("a project");
-    let (_info, meta) = view(&project, &jiff::Timestamp::UNIX_EPOCH, |_path| {
-        Err::<String, _>("no source is read: the project lists none")
-    })
+    let (_info, meta) = view(
+        &project,
+        omg_sources(&project),
+        &jiff::Timestamp::UNIX_EPOCH,
+        |_path| Err::<String, _>("no source is read: the project lists none"),
+    )
     .expect("the view is built");
 
     let checksum = meta.checksum.expect("a view always records a checksum map");

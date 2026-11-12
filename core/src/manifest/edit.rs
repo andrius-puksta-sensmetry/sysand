@@ -31,11 +31,11 @@ use toml_edit::{ArrayOfTables, Decor, Item, Table, TableLike, value};
 /// Re-exported so that a crate that stores a manifest can name it without
 /// depending on `toml_edit`.
 pub use toml_edit::{Array, DocumentMut, Value};
-use typed_path::Utf8UnixPathBuf;
+use typed_path::{Utf8UnixPath, Utf8UnixPathBuf};
 
 use crate::manifest::common::{
     InheritFrom, NormalizedIdentity, OMG_PUBLISHER, PathProblem, Sources, SourcesError, URL_KEYS,
-    UrlsG, normalized_identity,
+    UrlsG, is_wildcard, normalized_identity, wildcard_matches,
 };
 use crate::manifest::diagnostics::Diagnostic;
 use crate::manifest::inherit::{Inherited, MetaProperty};
@@ -364,6 +364,19 @@ pub enum EditError {
     Sources(#[from] SourcesError),
     #[error("`{0}` is not listed in `sources`")]
     SourceNotListed(Utf8UnixPathBuf),
+    /// The path is a file a wildcard entry already names.
+    #[error("`{path}` is already matched by `sources` entry `{entry}`")]
+    SourceMatchedByWildcard {
+        path: Utf8UnixPathBuf,
+        entry: Utf8UnixPathBuf,
+    },
+    /// The path is named only by a wildcard entry, which cannot drop one
+    /// of its files.
+    #[error("`{path}` is not listed in `sources` by itself; it is matched by the entry `{entry}`")]
+    SourceOnlyMatchedByWildcard {
+        path: Utf8UnixPathBuf,
+        entry: Utf8UnixPathBuf,
+    },
     /// `sources` entries are relative to the project root, and `include`
     /// cannot convert a path that leaves the project.
     #[error("`{0}` is outside the project, so it cannot be listed in `sources`")]
@@ -638,11 +651,27 @@ pub fn include_source(doc: &mut DocumentMut, path: &str) -> Result<Utf8UnixPathB
     let wanted = strict_entry(path)?;
     let array = sources_mut(doc)?;
     let mut candidate = entries(array);
+    if let Some(entry) = matching_wildcard(&candidate, &wanted) {
+        return Err(EditError::SourceMatchedByWildcard {
+            path: wanted,
+            entry: entry.clone(),
+        });
+    }
     candidate.push(wanted.clone());
     Sources::new(candidate)?;
 
     push_entry(array, wanted.as_str());
     Ok(wanted)
+}
+
+/// The first wildcard entry of `entries` that matches `path`.
+fn matching_wildcard<'a>(
+    entries: &'a [Utf8UnixPathBuf],
+    path: &Utf8UnixPath,
+) -> Option<&'a Utf8UnixPathBuf> {
+    entries
+        .iter()
+        .find(|entry| is_wildcard(entry) && wildcard_matches(entry, path))
 }
 
 /// Convert a path into the strict form `sources` holds: `./a.sysml`
@@ -676,10 +705,16 @@ pub fn exclude_source(doc: &mut DocumentMut, path: &str) -> Result<Utf8UnixPathB
         .clone();
 
     let array = sources_mut(doc)?;
-    let at = entries(array)
-        .iter()
-        .position(|entry| *entry == wanted)
-        .ok_or_else(|| EditError::SourceNotListed(wanted.clone()))?;
+    let listed = entries(array);
+    let Some(at) = listed.iter().position(|entry| *entry == wanted) else {
+        return Err(match matching_wildcard(&listed, &wanted) {
+            Some(entry) => EditError::SourceOnlyMatchedByWildcard {
+                path: wanted,
+                entry: entry.clone(),
+            },
+            None => EditError::SourceNotListed(wanted),
+        });
+    };
 
     remove_entry(array, at);
     Ok(wanted)

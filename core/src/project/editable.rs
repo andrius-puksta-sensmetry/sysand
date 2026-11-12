@@ -107,4 +107,11 @@ impl<P: ProjectRead> ProjectRead for EditableProject<P> {
     fn project_root(&self) -> Option<&camino::Utf8Path> {
         self.inner.project_root()
     }
+
+    fn list_source_dir(
+        &self,
+        dir: &typed_path::Utf8UnixPath,
+    ) -> Result<Option<Vec<crate::manifest::common::SourceDirEntry>>, Self::Error> {
+        self.inner.list_source_dir(dir)
+    }
 }

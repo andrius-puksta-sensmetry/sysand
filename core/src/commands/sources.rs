@@ -10,9 +10,15 @@ use typed_path::Utf8UnixPathBuf;
 
 use crate::{
     env::ReadEnvironment,
-    manifest::project::UnlistedFiles,
+    manifest::{
+        common::{ExpandError, ExpandProblem},
+        project::UnlistedFiles,
+    },
     model::{InterchangeProjectUsage, InterchangeProjectValidationError},
-    project::{ProjectDefinition, ProjectRead, memory::InMemoryProject, utils::Identifier},
+    project::{
+        ProjectDefinition, ProjectRead, expanded_sources, memory::InMemoryProject,
+        utils::Identifier,
+    },
     resolve::{
         env::EnvResolver,
         memory::{AcceptAll, MemoryResolver},
@@ -82,6 +88,8 @@ pub enum SourcesError<ProjectError> {
     },
     #[error(transparent)]
     Unlisted(UnlistedFiles),
+    #[error(transparent)]
+    Sources(ExpandProblem),
 }
 
 /// Enumerates source files in a project (as relative Unix-paths under the project root).
@@ -93,24 +101,24 @@ pub fn do_sources_project_no_deps<Pr: ProjectRead>(
 ) -> Result<Vec<Utf8UnixPathBuf>, SourcesError<Pr::Error>> {
     match project.get_project().map_err(SourcesError::Project)? {
         None => Ok(vec![]),
-        Some(definition) => do_sources_definition(&definition, include_index),
+        Some(definition) => do_sources_definition(project, &definition, include_index),
     }
 }
 
 /// [`do_sources_project_no_deps`] for a project whose manifest is already
 /// read as `definition`.
-pub fn do_sources_definition<ProjectError>(
+pub fn do_sources_definition<Pr: ProjectRead>(
+    project: &Pr,
     definition: &ProjectDefinition,
     include_index: bool,
-) -> Result<Vec<Utf8UnixPathBuf>, SourcesError<ProjectError>> {
+) -> Result<Vec<Utf8UnixPathBuf>, SourcesError<Pr::Error>> {
     let meta = match definition {
-        ProjectDefinition::Toml(project) => {
-            return Ok(project
-                .sources()
-                .map_err(SourcesError::Unlisted)?
-                .iter()
-                .cloned()
-                .collect());
+        ProjectDefinition::Toml(manifest) => {
+            let sources = manifest.sources().map_err(SourcesError::Unlisted)?;
+            return expanded_sources(project, sources).map_err(|error| match error {
+                ExpandError::List(error) => SourcesError::Project(error),
+                ExpandError::Problem(problem) => SourcesError::Sources(problem),
+            });
         }
         ProjectDefinition::Json { info: _, meta } => meta,
     };
@@ -140,6 +148,8 @@ pub enum LocalSourcesError {
     Path(#[from] PathError),
     #[error(transparent)]
     Unlisted(UnlistedFiles),
+    #[error(transparent)]
+    Sources(ExpandProblem),
 }
 
 #[cfg(feature = "filesystem")]
@@ -149,6 +159,7 @@ impl From<SourcesError<LocalSrcError>> for LocalSourcesError {
             SourcesError::Project(error) => Self::Project(error),
             SourcesError::Validation { name, source } => Self::Validation { name, source },
             SourcesError::Unlisted(error) => Self::Unlisted(error),
+            SourcesError::Sources(problem) => Self::Sources(problem),
         }
     }
 }
@@ -173,7 +184,7 @@ pub fn do_sources_local_src_definition(
     definition: &ProjectDefinition,
     include_index: bool,
 ) -> Result<Vec<Utf8PathBuf>, LocalSourcesError> {
-    let unix_sources = do_sources_definition::<LocalSrcError>(definition, include_index)?;
+    let unix_sources = do_sources_definition(project, definition, include_index)?;
     real_source_paths(project, &unix_sources)
 }
 

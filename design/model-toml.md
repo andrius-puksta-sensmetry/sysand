@@ -98,14 +98,23 @@ Main project metadata is in the `[project]` table of `model.toml`:
     leading or trailing slash. Nothing is resolved on read, so no entry
     can escape the project root or name the root itself, and every
     listed file has a place in a KPAR; what a path resolves to through a
-    symlink is out of scope and is not checked. The entry as written is
-    what the `checksum` map of a built KPAR -- and, for the OMG family,
-    its `index` map -- is keyed by.
+    symlink is out of scope and is not checked. The entry as written (for a
+    wildcard entry, each path it matches) is what the `checksum` map of
+    a built KPAR -- and, for the OMG family, its `index` map -- is keyed
+    by.
     The commands that write `sources` (`sysand include`, `sysand
-migrate`) write this form, converting into it what they are given.
-    Every entry names a single file, listed explicitly; directories are
-    not admitted and globs never will be (decided 2026-09-22). Two equal entries are a duplicate and rejected. Every
-    entry names a KerML (`.kerml`) or SysML (`.sysml`) file, the
+    migrate`) write this form, converting into it what they are given.
+    An entry names a single file, or is a *wildcard entry*: one
+    containing `*`, which matches any run of characters (the empty one
+    included, `/` excepted) within its path segment, so `lib/*.kerml`
+    names every `.kerml` file directly in `lib`, and `*/Base.kerml`
+    every `Base.kerml` one directory down. `*` is the only wildcard:
+    every other character, `?` and `[` included, matches itself, and
+    `**` is an error. A `*` may appear in any segment, but the extension
+    is written literally (`*.kerml`, never `*` or `Base.*`), so the
+    language rules below judge a wildcard entry as written. Directories
+    are not admitted. Two equal entries are a duplicate and rejected.
+    Every entry names a KerML (`.kerml`) or SysML (`.sysml`) file, the
     extension compared case-insensitively as `sysand include` compares
     it today, and the metamodel decides which of the two the project may
     carry (see Metamodel); any other entry is an error. Files of other
@@ -113,7 +122,14 @@ migrate`) write this form, converting into it what they are given.
     version adds a dedicated key for them (a `sources_json`, say) rather
     than widening this one. Whether
     the files exist is checked only for build/publish, as with the
-    license file, so reading a manifest never touches them. Unlike the
+    license file, so reading a manifest never touches them. A wildcard
+    entry is likewise expanded only where the files are read (build and
+    publish, `sysand sources`, and computing a project's symbols, as
+    `sysand lock` does): it becomes the files it matches, sorted by
+    path, in its place in the list. A wildcard entry that matches no
+    file is an error there, as is a file named by two entries (a
+    wildcard entry and a literal one, or two wildcard entries); a match
+    is held to the rules of a written entry. Unlike the
     keys below, `sources` is per-project only: it cannot appear in
     `[workspace]` and cannot be inherited by a member (see
     workspaces.md), since the file layout of one project says nothing
@@ -873,8 +889,9 @@ follow from `sources` being the only file list:
 
 - `sysand include <paths>` appends each path to `sources` in the strict
   form the key requires (see Main project metadata), rejecting a path
-  that is not inside the project root and rejecting a duplicate; `sysand
-exclude <paths>` removes it. Neither extracts symbols or hashes files,
+  that is not inside the project root, a duplicate, and a file a
+  wildcard entry already matches; `sysand exclude <paths>` removes it,
+  and refuses a file only a wildcard entry matches. Neither extracts symbols or hashes files,
   as both maps are computed at build; `--compute-checksum` and
   `--no-index-symbols` are rejected on a toml project with the message
   that the field is computed when the KPAR is built. A path that does

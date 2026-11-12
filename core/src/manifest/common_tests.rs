@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // SPDX-FileCopyrightText: © 2026 Sysand contributors <opensource@sensmetry.com>
 
+use std::assert_matches;
+
 use typed_path::{Utf8UnixPath, Utf8UnixPathBuf};
 
 use crate::manifest::common::{
-    InheritFrom, InheritMarker, Maintainer, PathError, PathKey, PathProblem, Sources, SourcesError,
-    StdlibStem, admitted_source, is_valid_group_name, normalized_identity, path_problem, root_path,
+    ExpandError, ExpandProblem, InheritFrom, InheritMarker, Maintainer, PathError, PathKey,
+    PathProblem, SourceDirEntry, SourceDirEntryKind, Sources, SourcesError, StdlibStem,
+    admitted_source, is_valid_group_name, normalized_identity, path_problem, root_path,
+    segment_matches, wildcard_matches,
 };
 use crate::model::{IndexName, IndexPublisher, KnownMetamodel};
 
@@ -358,8 +362,7 @@ fn the_two_sources_form_errors_read_in_full() {
     let directory = sources_error(&["src/"]);
     assert_eq!(
         directory.to_string(),
-        "`sources` entry `src/` names a directory; it must name a single model file \
-         (directories and globs are not admitted)"
+        "`sources` entry `src/` names a directory; it must name a model file (directories are not admitted)"
     );
 }
 
@@ -410,8 +413,7 @@ fn sources_and_root_share_their_checks() {
         (
             "src/",
             PathProblem::Directory,
-            "`sources` entry `src/` names a directory; it must name a single model file \
-             (directories and globs are not admitted)",
+            "`sources` entry `src/` names a directory; it must name a model file (directories are not admitted)",
         ),
         (
             "notes.txt",
@@ -433,5 +435,255 @@ fn sources_and_root_share_their_checks() {
     assert_eq!(
         root_path("src/a.sysml").map(|p| p.as_str().to_owned()),
         Ok("src/a.sysml".to_owned())
+    );
+}
+
+/// A `*` matches any run of characters within one segment, the empty one
+/// included; every other character matches itself.
+#[test]
+fn a_wildcard_segment_matches_any_run_of_characters() {
+    for (pattern, name) in [
+        ("*.kerml", "Base.kerml"),
+        ("*.kerml", ".kerml"),
+        ("B*.kerml", "Base.kerml"),
+        ("*a*e*.kerml", "Base.kerml"),
+        ("Base*.kerml", "Base.kerml"),
+        ("*", ""),
+        ("a*a", "aa"),
+        ("?[a].kerml", "?[a].kerml"),
+    ] {
+        assert!(
+            segment_matches(pattern, name),
+            "`{pattern}` must match `{name}`"
+        );
+    }
+    for (pattern, name) in [
+        ("*.kerml", "Base.sysml"),
+        ("*.kerml", "Base.KERML"),
+        ("B*.kerml", "base.kerml"),
+        ("a*a", "a"),
+        ("*b*b", "ab"),
+        ("?.kerml", "a.kerml"),
+    ] {
+        assert!(
+            !segment_matches(pattern, name),
+            "`{pattern}` must not match `{name}`"
+        );
+    }
+}
+
+/// A `*` never crosses a `/`.
+#[test]
+fn a_wildcard_matches_segment_by_segment() {
+    let matches = |pattern: &str, path: &str| {
+        wildcard_matches(Utf8UnixPath::new(pattern), Utf8UnixPath::new(path))
+    };
+    assert!(matches("*.kerml", "Base.kerml"));
+    assert!(matches("*/Base.kerml", "lib/Base.kerml"));
+    assert!(matches("lib/*.kerml", "lib/Base.kerml"));
+    assert!(!matches("*.kerml", "lib/Base.kerml"));
+    assert!(!matches("lib/*.kerml", "lib/sub/Base.kerml"));
+    assert!(!matches("*/*.kerml", "Base.kerml"));
+}
+
+/// A wildcard entry passes the same checks as any other entry; only `**`
+/// is refused.
+#[test]
+fn wildcard_entries_are_checked_as_written() {
+    let entries = sources(&["*.kerml", "lib/*/B*.sysml", "Base.kerml"])
+        .expect("wildcard entries are entries");
+    assert!(entries.has_wildcards());
+    assert!(!sources(&["Base.kerml"]).expect("literal").has_wildcards());
+
+    for (entry, problem) in [
+        ("**.kerml", PathProblem::RecursiveWildcard),
+        ("**/Base.kerml", PathProblem::RecursiveWildcard),
+        ("*", PathProblem::NotModelFile),
+        ("Base.*", PathProblem::NotModelFile),
+        ("Base.ker*", PathProblem::NotModelFile),
+        ("lib/*/", PathProblem::Directory),
+        ("../*.kerml", PathProblem::NotStrict),
+    ] {
+        assert_eq!(
+            sources_error(&[entry]),
+            SourcesError::path(problem, entry),
+            "{entry}"
+        );
+    }
+    assert_eq!(
+        sources_error(&["**/a.kerml"]).to_string(),
+        "`sources` entry `**/a.kerml` contains `**`, which is not supported;\n\
+         a `*` matches any characters within one path segment"
+    );
+    assert_eq!(
+        sources_error(&["*.kerml", "*.kerml"]),
+        SourcesError::Duplicate("*.kerml".to_owned())
+    );
+}
+
+/// `root` names a single file, so it cannot be a wildcard entry.
+#[test]
+fn root_is_never_a_wildcard() {
+    let error = root_path("*.sysml").expect_err("a wildcard root");
+    assert_eq!(
+        error,
+        PathError::new(PathKey::Root, PathProblem::Wildcard, "*.sysml")
+    );
+    assert_eq!(
+        error.to_string(),
+        "`root` `*.sysml` contains `*`; it must name a single file"
+    );
+}
+
+/// A file tree for [`Sources::expand`]: every listed path is a file, and
+/// the directories are the ones those paths imply.
+fn lister(
+    files: &'static [&'static str],
+) -> impl FnMut(&Utf8UnixPath) -> Result<Option<Vec<SourceDirEntry>>, std::convert::Infallible> {
+    move |dir| {
+        let mut listed: Vec<SourceDirEntry> = Vec::new();
+        for file in files {
+            let Ok(rest) = Utf8UnixPath::new(file).strip_prefix(dir) else {
+                continue;
+            };
+            let (name, kind) = match rest.as_str().split_once('/') {
+                Some((name, _)) => (name, SourceDirEntryKind::Directory),
+                None => (rest.as_str(), SourceDirEntryKind::File),
+            };
+            if !listed.iter().any(|entry| entry.name == name) {
+                listed.push(SourceDirEntry {
+                    name: name.to_owned(),
+                    kind,
+                });
+            }
+        }
+        // Listing order is not sorted order.
+        listed.reverse();
+        Ok(Some(listed))
+    }
+}
+
+fn expand(
+    entries: &[&str],
+    files: &'static [&'static str],
+) -> Result<Vec<String>, ExpandError<std::convert::Infallible>> {
+    Ok(sources(entries)
+        .expect("valid entries")
+        .expand(lister(files))?
+        .into_iter()
+        .map(|path| path.to_string())
+        .collect())
+}
+
+fn expand_problem(entries: &[&str], files: &'static [&'static str]) -> ExpandProblem {
+    match expand(entries, files).expect_err("expansion should fail") {
+        ExpandError::Problem(problem) => problem,
+        ExpandError::List(never) => match never {},
+    }
+}
+
+/// Entries keep their order; each wildcard entry becomes the files it
+/// matches, sorted by path, and a literal entry is passed through.
+#[test]
+fn expansion_keeps_entry_order_and_sorts_matches() {
+    const FILES: &[&str] = &[
+        "b.kerml",
+        "a.kerml",
+        "notes.txt",
+        "a.sysml",
+        "lib/z.kerml",
+        "lib/y.kerml",
+        "lib/sub/x.kerml",
+        "other/y.kerml",
+        "dir.kerml/inner.kerml",
+    ];
+    assert_eq!(
+        expand(&["lib/z.kerml", "*.kerml", "missing.kerml"], FILES).expect("expands"),
+        ["lib/z.kerml", "a.kerml", "b.kerml", "missing.kerml"]
+    );
+    assert_eq!(
+        expand(&["*/y.kerml"], FILES).expect("expands"),
+        ["lib/y.kerml", "other/y.kerml"]
+    );
+    assert_eq!(
+        expand(&["lib/*/*.kerml", "*.sysml"], FILES).expect("expands"),
+        ["lib/sub/x.kerml", "a.sysml"]
+    );
+}
+
+/// Literal entries are not listed, so a project whose files cannot be
+/// listed expands as long as it has no wildcard entry.
+#[test]
+fn expansion_lists_only_for_wildcard_entries() {
+    let entries = sources(&["a.kerml", "lib/b.kerml"]).expect("valid");
+    let expanded = entries
+        .expand(|_| -> Result<_, std::convert::Infallible> { Ok(None) })
+        .expect("nothing to list");
+    assert_eq!(expanded, entries.as_slice());
+
+    let wildcard = sources(&["*.kerml"]).expect("valid");
+    let error = wildcard
+        .expand(|_| -> Result<_, std::convert::Infallible> { Ok(None) })
+        .expect_err("cannot be listed");
+    assert_matches!(
+        error,
+        ExpandError::Problem(ExpandProblem::Unlistable(entry)) if entry == "*.kerml"
+    );
+}
+
+#[test]
+fn a_wildcard_entry_that_matches_nothing_is_an_error() {
+    const FILES: &[&str] = &["a.sysml", "lib/b.kerml"];
+    let problem = expand_problem(&["a.sysml", "*.kerml"], FILES);
+    assert_eq!(problem, ExpandProblem::NoMatch("*.kerml".to_owned()));
+    assert_eq!(
+        problem.to_string(),
+        "`sources` entry `*.kerml` matches no file"
+    );
+    assert_eq!(
+        expand_problem(&["missing/*.kerml"], FILES),
+        ExpandProblem::NoMatch("missing/*.kerml".to_owned())
+    );
+}
+
+/// A file named by a wildcard entry and by any other entry is an error,
+/// whichever comes first.
+#[test]
+fn a_file_named_by_two_entries_is_an_error() {
+    const FILES: &[&str] = &["a.kerml", "ab.kerml"];
+    let problem = expand_problem(&["a.kerml", "a*.kerml"], FILES);
+    assert_eq!(
+        problem,
+        ExpandProblem::Overlap {
+            path: "a.kerml".to_owned(),
+            first: "a.kerml".to_owned(),
+            second: "a*.kerml".to_owned(),
+        }
+    );
+    assert_eq!(
+        problem.to_string(),
+        "`a.kerml` is named by both `sources` entry `a.kerml` and `a*.kerml`"
+    );
+    assert_eq!(
+        expand_problem(&["*b.kerml", "a*.kerml"], FILES),
+        ExpandProblem::Overlap {
+            path: "ab.kerml".to_owned(),
+            first: "*b.kerml".to_owned(),
+            second: "a*.kerml".to_owned(),
+        }
+    );
+}
+
+/// A matched file is held to the rules of a written entry.
+#[test]
+fn a_match_that_is_not_a_valid_entry_is_an_error() {
+    const FILES: &[&str] = &["a\\b.kerml"];
+    assert_eq!(
+        expand_problem(&["*.kerml"], FILES),
+        ExpandProblem::Invalid {
+            entry: "*.kerml".to_owned(),
+            path: "a\\b.kerml".to_owned(),
+            problem: PathProblem::Backslash,
+        }
     );
 }

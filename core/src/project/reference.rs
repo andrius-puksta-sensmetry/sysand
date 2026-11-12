@@ -87,6 +87,13 @@ impl<Project: ProjectRead> ProjectRead for ProjectReference<Project> {
     fn project_root(&self) -> Option<&camino::Utf8Path> {
         self.project.project_root()
     }
+
+    fn list_source_dir(
+        &self,
+        dir: &typed_path::Utf8UnixPath,
+    ) -> Result<Option<Vec<crate::manifest::common::SourceDirEntry>>, Self::Error> {
+        self.project.list_source_dir(dir)
+    }
 }
 
 #[cfg(feature = "filesystem")]

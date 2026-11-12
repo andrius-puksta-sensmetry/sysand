@@ -6,7 +6,7 @@
 //! `stdlib` key and `sources`.
 
 use crate::paths::{RelativePathKind, RelativeUnixPathError, parse_relative_unix_path};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Display;
 
 use fluent_uri::Iri;
@@ -288,7 +288,9 @@ pub enum SourcesError {
 /// written as `sources = []`.
 ///
 /// Entries are stored **as written**: that form is what the `checksum`
-/// and `index` maps of a built KPAR are keyed by.
+/// and `index` maps of a built KPAR are keyed by. An entry containing
+/// `*` is a wildcard entry, naming every file it matches (see
+/// [`Sources::expand`]); the maps are keyed by the matched paths.
 ///
 /// `sources` is per-project only: it cannot appear in `[workspace]` and
 /// cannot be inherited, since it describes one project's file layout.
@@ -313,12 +315,19 @@ pub enum PathProblem {
     NotStrict,
     /// Neither `.kerml` nor `.sysml`.
     NotModelFile,
+    /// Contains `**` in a segment.
+    RecursiveWildcard,
+    /// Contains `*` where a single file must be named.
+    Wildcard,
 }
 
 /// The first shared check the path fails, or `None` if it passes all of them.
 pub fn path_problem(raw: &str) -> Option<PathProblem> {
     if let Err(error) = parse_relative_unix_path(raw, RelativePathKind::SubFile) {
         return Some(PathProblem::from(&error));
+    }
+    if raw.contains("**") {
+        return Some(PathProblem::RecursiveWildcard);
     }
     if Language::guess_from_path(Utf8UnixPath::new(raw)).is_none() {
         return Some(PathProblem::NotModelFile);
@@ -346,8 +355,7 @@ impl Display for PathProblem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Directory => {
-                "names a directory; it must name a single model file \
-                 (directories and globs are not admitted)"
+                "names a directory; it must name a model file (directories are not admitted)"
             }
             Self::Backslash => {
                 "contains a backslash `\\`;\n\
@@ -361,6 +369,11 @@ impl Display for PathProblem {
                  with no `.` or `..` component and no repeated or leading slash"
             }
             Self::NotModelFile => "is not a KerML (`.kerml`) or SysML (`.sysml`) file",
+            Self::RecursiveWildcard => {
+                "contains `**`, which is not supported;\n\
+                 a `*` matches any characters within one path segment"
+            }
+            Self::Wildcard => "contains `*`; it must name a single file",
         })
     }
 }
@@ -411,7 +424,12 @@ impl SourcesError {
 /// **as written**. Whether it is one of the `sources` entries is the
 /// resolver's question, since only a resolved project knows its family.
 pub fn root_path(raw: &str) -> Result<Utf8UnixPathBuf, PathError> {
-    match path_problem(raw) {
+    let problem = if raw.contains('*') {
+        Some(PathProblem::Wildcard)
+    } else {
+        path_problem(raw)
+    };
+    match problem {
         Some(problem) => Err(PathError::new(PathKey::Root, problem, raw)),
         None => Ok(Utf8UnixPathBuf::from(raw)),
     }
@@ -462,6 +480,196 @@ impl Sources {
 
     pub fn as_slice(&self) -> &[Utf8UnixPathBuf] {
         &self.0
+    }
+
+    /// Whether any entry is a wildcard entry.
+    pub fn has_wildcards(&self) -> bool {
+        self.0.iter().any(|entry| is_wildcard(entry))
+    }
+
+    /// The files the entries name, in list order, with each wildcard entry
+    /// replaced by the files it matches, sorted by path.
+    ///
+    /// `list` gives the entries of a directory, relative to the project
+    /// root (the root itself is the empty path), or `None` when the
+    /// project's files cannot be listed; a missing directory has no
+    /// entries. It is called only for wildcard entries. A literal entry is
+    /// passed through without checking that its file exists.
+    ///
+    /// A wildcard entry that matches no file, a file named by two entries,
+    /// and a match that is not a valid `sources` entry are errors.
+    pub fn expand<E>(
+        &self,
+        mut list: impl FnMut(&Utf8UnixPath) -> Result<Option<Vec<SourceDirEntry>>, E>,
+    ) -> Result<Vec<Utf8UnixPathBuf>, ExpandError<E>> {
+        if !self.has_wildcards() {
+            return Ok(self.0.clone());
+        }
+        let mut named_by: HashMap<Utf8UnixPathBuf, &Utf8UnixPathBuf> = HashMap::new();
+        let mut files = Vec::new();
+        for entry in &self.0 {
+            let matches = if is_wildcard(entry) {
+                let matches = expand_wildcard(entry, &mut list)?;
+                if matches.is_empty() {
+                    return Err(ExpandProblem::NoMatch(entry.to_string()).into());
+                }
+                matches
+            } else {
+                vec![entry.clone()]
+            };
+            for file in matches {
+                if let Some(problem) = path_problem(file.as_str()) {
+                    return Err(ExpandProblem::Invalid {
+                        entry: entry.to_string(),
+                        path: file.to_string(),
+                        problem,
+                    }
+                    .into());
+                }
+                if let Some(first) = named_by.insert(file.clone(), entry) {
+                    return Err(ExpandProblem::Overlap {
+                        path: file.to_string(),
+                        first: first.to_string(),
+                        second: entry.to_string(),
+                    }
+                    .into());
+                }
+                files.push(file);
+            }
+        }
+        Ok(files)
+    }
+}
+
+/// Whether a `sources` entry is a wildcard entry: one containing `*`,
+/// which matches any characters, `/` excepted, within its path segment.
+pub fn is_wildcard(entry: &Utf8UnixPath) -> bool {
+    entry.as_str().contains('*')
+}
+
+/// One entry of a directory listed to expand a wildcard `sources` entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceDirEntry {
+    pub name: String,
+    pub kind: SourceDirEntryKind,
+}
+
+/// What a [`SourceDirEntry`] is, with symbolic links followed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceDirEntryKind {
+    File,
+    Directory,
+    /// Neither, such as a broken symbolic link. Never matched.
+    Other,
+}
+
+/// Why the `sources` entries could not be turned into the files they
+/// name: the project's files could not be listed, or [`ExpandProblem`].
+#[derive(Debug, Error)]
+pub enum ExpandError<E> {
+    #[error(transparent)]
+    List(E),
+    #[error(transparent)]
+    Problem(#[from] ExpandProblem),
+}
+
+/// What is wrong with the files the `sources` entries name.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum ExpandProblem {
+    #[error("`sources` entry `{0}` cannot be expanded: the project's files cannot be listed")]
+    Unlistable(String),
+    #[error("`sources` entry `{0}` matches no file")]
+    NoMatch(String),
+    #[error("`{path}` is named by both `sources` entry `{first}` and `{second}`")]
+    Overlap {
+        path: String,
+        first: String,
+        second: String,
+    },
+    #[error("`sources` entry `{entry}` matches `{path}`, which {problem}")]
+    Invalid {
+        entry: String,
+        path: String,
+        problem: PathProblem,
+    },
+}
+
+/// The files a wildcard entry matches, sorted by path.
+///
+/// Segments before the first wildcard segment are taken as written; from
+/// there on every segment is matched against a directory listing, so a
+/// match names a file that exists.
+fn expand_wildcard<E>(
+    entry: &Utf8UnixPath,
+    list: &mut impl FnMut(&Utf8UnixPath) -> Result<Option<Vec<SourceDirEntry>>, E>,
+) -> Result<Vec<Utf8UnixPathBuf>, ExpandError<E>> {
+    let segments: Vec<&str> = entry.as_str().split('/').collect();
+    let mut found = vec![Utf8UnixPathBuf::new()];
+    let mut listing = false;
+    for (index, segment) in segments.iter().enumerate() {
+        listing |= segment.contains('*');
+        if !listing {
+            for path in &mut found {
+                path.push(segment);
+            }
+            continue;
+        }
+        let wanted = if index + 1 == segments.len() {
+            SourceDirEntryKind::File
+        } else {
+            SourceDirEntryKind::Directory
+        };
+        let mut next = Vec::new();
+        for dir in &found {
+            let mut entries = list(dir)
+                .map_err(ExpandError::List)?
+                .ok_or_else(|| ExpandProblem::Unlistable(entry.to_string()))?;
+            entries.sort_by(|a, b| a.name.cmp(&b.name));
+            next.extend(
+                entries
+                    .into_iter()
+                    .filter(|listed| {
+                        listed.kind == wanted && segment_matches(segment, &listed.name)
+                    })
+                    .map(|listed| dir.join(listed.name)),
+            );
+        }
+        found = next;
+    }
+    Ok(found)
+}
+
+/// Whether `name` matches one path segment of a `sources` entry, where
+/// each `*` matches any run of characters, the empty one included.
+pub fn segment_matches(pattern: &str, name: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let Some(rest) = parts.next().and_then(|first| name.strip_prefix(first)) else {
+        return false;
+    };
+    let parts: Vec<&str> = parts.collect();
+    let Some((last, middle)) = parts.split_last() else {
+        return rest.is_empty();
+    };
+    let mut rest = rest;
+    for part in middle {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    rest.ends_with(last)
+}
+
+/// Whether wildcard entry `pattern` matches `path`, segment by segment.
+pub fn wildcard_matches(pattern: &Utf8UnixPath, path: &Utf8UnixPath) -> bool {
+    let mut patterns = pattern.as_str().split('/');
+    let mut names = path.as_str().split('/');
+    loop {
+        match (patterns.next(), names.next()) {
+            (None, None) => return true,
+            (Some(pattern), Some(name)) if segment_matches(pattern, name) => {}
+            _ => return false,
+        }
     }
 }
 

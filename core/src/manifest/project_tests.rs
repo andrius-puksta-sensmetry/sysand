@@ -557,8 +557,7 @@ fn root_is_held_to_the_sources_entry_checks() {
         ),
         (
             "\"src/\"",
-            "`root` `src/` names a directory; it must name a single model file \
-             (directories and globs are not admitted)",
+            "`root` `src/` names a directory; it must name a model file (directories are not admitted)",
         ),
         (
             "\"notes.txt\"",

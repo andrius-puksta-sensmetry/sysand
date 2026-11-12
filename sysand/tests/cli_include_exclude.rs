@@ -584,6 +584,45 @@ fn exclude_refuses_a_path_that_is_not_listed() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
+/// A file a wildcard entry already matches would be named twice.
+#[test]
+fn include_refuses_a_file_a_wildcard_entry_matches() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp_dir, cwd) = toml_project()?;
+    let wildcard = manifest(&cwd)?.replace("sources = []", "sources = [\"lib/*.sysml\"]");
+    fs::write(cwd.join("model.toml"), &wildcard)?;
+    fs::create_dir_all(cwd.join("lib"))?;
+    fs::write(cwd.join("lib/test.sysml"), b"package P;\n")?;
+
+    run_sysand_in(&cwd, ["include", "lib/test.sysml"], None)?
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains(
+            "`lib/test.sysml` is already matched by `sources` entry `lib/*.sysml`",
+        ));
+    assert_eq!(manifest(&cwd)?, wildcard);
+    Ok(())
+}
+
+/// A wildcard entry cannot drop one of its files.
+#[test]
+fn exclude_refuses_a_file_only_a_wildcard_entry_matches() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (_temp_dir, cwd) = toml_project()?;
+    let wildcard = manifest(&cwd)?.replace("sources = []", "sources = [\"*.sysml\"]");
+    fs::write(cwd.join("model.toml"), &wildcard)?;
+    fs::write(cwd.join("test.sysml"), b"package P;\n")?;
+
+    run_sysand_in(&cwd, ["exclude", "test.sysml"], None)?
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains(
+            "`test.sysml` is not listed in `sources` by itself; it is matched by the entry \
+             `*.sysml`",
+        ));
+    assert_eq!(manifest(&cwd)?, wildcard);
+    Ok(())
+}
+
 /// Through the CLI: a file the project's metamodel
 /// does not admit is refused before `sources` is touched.
 #[test]

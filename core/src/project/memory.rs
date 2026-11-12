@@ -13,7 +13,12 @@ use crate::{
     context::ProjectContext,
     env::utils::{CloneError, clone_project},
     lock::Source,
-    manifest::{MODEL_TOML_FILE, edit::DocumentMut, kpar_view},
+    manifest::{
+        MODEL_TOML_FILE,
+        common::{SourceDirEntry, SourceDirEntryKind},
+        edit::DocumentMut,
+        kpar_view,
+    },
     model::{
         InterchangeProjectInfoRaw, InterchangeProjectMetadataRaw, META_JSON_FILE, PROJECT_JSON_FILE,
     },
@@ -219,6 +224,36 @@ impl ProjectRead for InMemoryProject {
             return Err(ManifestError::NoTomlManifest);
         };
         Ok(crate::manifest::edit::validated(MODEL_TOML_FILE, text).map_err(InMemoryError::from)?)
+    }
+
+    fn list_source_dir(
+        &self,
+        dir: &Utf8UnixPath,
+    ) -> Result<Option<Vec<SourceDirEntry>>, InMemoryError> {
+        let mut listed: Vec<SourceDirEntry> = Vec::new();
+        for path in self.files.keys() {
+            // A path outside `dir` is not one of its entries.
+            // ast-grep-ignore: if-let-ok
+            let Ok(rest) = path.strip_prefix(dir) else {
+                continue;
+            };
+            let mut rest = rest.as_str().splitn(2, '/');
+            let Some(name) = rest.next().filter(|name| !name.is_empty()) else {
+                continue;
+            };
+            let kind = if rest.next().is_some() {
+                SourceDirEntryKind::Directory
+            } else {
+                SourceDirEntryKind::File
+            };
+            if !listed.iter().any(|entry| entry.name == name) {
+                listed.push(SourceDirEntry {
+                    name: name.to_owned(),
+                    kind,
+                });
+            }
+        }
+        Ok(Some(listed))
     }
 
     type SourceReader<'a> = &'a [u8];

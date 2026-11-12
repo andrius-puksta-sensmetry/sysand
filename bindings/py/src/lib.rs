@@ -1148,6 +1148,7 @@ fn do_build_py(
                 }
                 | KParBuildError::MissingIndexSymbol(_, _)
                 | KParBuildError::Unlisted(_)
+                | KParBuildError::Sources(_)
                 | KParBuildError::KeepIndexOnRoot => PyValueError::new_err(e),
                 KParBuildError::PathUsage(_) => PyValueError::new_err(format!(
                     "{e}\nto build anyway, pass `allow_path_usage=True`"

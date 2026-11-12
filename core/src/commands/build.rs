@@ -16,6 +16,7 @@ use crate::{
     env::utils::ErrorBound,
     include::read_project_file_to_string,
     manifest::{
+        common::{ExpandError, ExpandProblem},
         kpar_view::{self, ViewError},
         usage::{Usage, UsageBase},
     },
@@ -24,7 +25,7 @@ use crate::{
         InterchangeProjectValidationError, KerMlChecksumAlg, ProjectName, ProjectPublisher,
     },
     project::{
-        ProjectDefinition, ProjectOrIOError, ProjectRead,
+        ProjectDefinition, ProjectOrIOError, ProjectRead, expanded_sources,
         local_kpar::{KparInnerPath, LocalKParError, LocalKParProject, LocalKParProjectRaw},
         local_src::{LocalSrcError, LocalSrcProject},
         utils::{FsIoError, ZipArchiveError, wrapfs},
@@ -138,6 +139,8 @@ pub enum KParBuildError<ProjectReadError: ErrorBound> {
     ProjectRead(ProjectReadError),
     #[error(transparent)]
     Unlisted(crate::manifest::project::UnlistedFiles),
+    #[error(transparent)]
+    Sources(ExpandProblem),
     #[error(transparent)]
     Io(#[from] Box<FsIoError>),
     #[error("project's `.{name}.json` is invalid")]
@@ -389,16 +392,21 @@ fn do_build_kpar_inner<P: AsRef<Utf8Path>, Pr: ProjectRead>(
         Ok(Some(ProjectDefinition::Json { info, meta })) => (info, meta, None),
         Ok(Some(ProjectDefinition::Toml(manifest))) => {
             let mut contents = HashMap::new();
-            let (info, meta) = kpar_view::view(&manifest, &jiff::Timestamp::now(), |path| {
-                let source = read_project_file_to_string(project, &path)?;
-                contents.insert(path.to_string(), source.clone());
-                Ok::<_, ProjectOrIOError<Pr::Error>>(source)
-            })
-            .map_err(|error| match error {
-                ViewError::Read(error) => KParBuildError::from(error),
-                ViewError::Symbols(error) => KParBuildError::from(error),
-                ViewError::Unlisted(error) => KParBuildError::Unlisted(error),
+            let sources = manifest.sources().map_err(KParBuildError::Unlisted)?;
+            let sources = expanded_sources(project, sources).map_err(|error| match error {
+                ExpandError::List(error) => KParBuildError::ProjectRead(error),
+                ExpandError::Problem(problem) => KParBuildError::Sources(problem),
             })?;
+            let (info, meta) =
+                kpar_view::view(&manifest, &sources, &jiff::Timestamp::now(), |path| {
+                    let source = read_project_file_to_string(project, &path)?;
+                    contents.insert(path.to_string(), source.clone());
+                    Ok::<_, ProjectOrIOError<Pr::Error>>(source)
+                })
+                .map_err(|error| match error {
+                    ViewError::Read(error) => KParBuildError::from(error),
+                    ViewError::Symbols(error) => KParBuildError::from(error),
+                })?;
             viewed = Some(contents);
             (info, meta, Some(manifest))
         }

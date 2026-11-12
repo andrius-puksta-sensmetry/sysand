@@ -164,3 +164,39 @@ fn a_memory_project_refuses_to_store_an_invalid_manifest() {
     );
     assert_eq!(project.model_toml, None);
 }
+
+/// Wildcard `sources` entries expand against the stored files.
+#[test]
+fn a_memory_project_expands_wildcard_sources() {
+    let mut project = InMemoryProject::default();
+    project
+        .put_manifest_document(
+            &document(
+                &MANIFEST.replace("sources = []", "sources = [\"*.kerml\", \"lib/*/*.kerml\"]"),
+            ),
+            false,
+        )
+        .expect("a manifest");
+    for path in [
+        "B.kerml",
+        "A.kerml",
+        "notes.txt",
+        "lib/x/C.kerml",
+        "lib/y/D.kerml",
+        "lib/E.kerml",
+    ] {
+        project.files.insert(path.into(), String::new());
+    }
+    let Ok(Some(crate::project::ProjectDefinition::Toml(manifest))) = project.get_project() else {
+        panic!("a `model.toml` project");
+    };
+
+    let expanded =
+        crate::project::expanded_sources(&project, manifest.sources().expect("an OMG project"))
+            .expect("expands");
+    assert_eq!(
+        expanded,
+        ["A.kerml", "B.kerml", "lib/x/C.kerml", "lib/y/D.kerml"]
+            .map(typed_path::Utf8UnixPathBuf::from)
+    );
+}

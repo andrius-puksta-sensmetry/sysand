@@ -26,7 +26,7 @@ use syn::{Data, DataEnum, DeriveInput, parse_macro_input};
 ///
 /// # Method Delegation
 ///
-/// `get_project`, `read_source`, `sources`, `project_root`,
+/// `get_project`, `read_source`, `sources`, `project_root`, `list_source_dir`,
 /// `source_may_offer_multiple_versions`, `format`, `manifest_document`,
 /// `version`, `usage`,
 /// `checksum_canonical_hex` and `checksum_canonical_variant` are delegated to
@@ -48,6 +48,7 @@ pub fn project_read_derive(input: TokenStream) -> TokenStream {
         read_source_match_part: TokenStream2,
         sources_match_part: TokenStream2,
         project_root_match_part: TokenStream2,
+        list_source_dir_match_part: TokenStream2,
         source_may_offer_multiple_versions_match_part: TokenStream2,
         format_match_part: TokenStream2,
         manifest_document_match_part: TokenStream2,
@@ -138,6 +139,11 @@ pub fn project_read_derive(input: TokenStream) -> TokenStream {
                 project_root_match_part: quote! {
                     #enum_ident::#variant_ident(project) => project.project_root()
                 },
+                list_source_dir_match_part: quote! {
+                    #enum_ident::#variant_ident(project) => project
+                        .list_source_dir(dir)
+                        .map_err(#error_ident::#variant_ident)
+                },
                 source_may_offer_multiple_versions_match_part: quote! {
                     #enum_ident::#variant_ident(project) => project.source_may_offer_multiple_versions()
                 },
@@ -191,6 +197,7 @@ pub fn project_read_derive(input: TokenStream) -> TokenStream {
     let mut source_reader_match = vec![];
     let mut source_reader_args = vec![];
     let mut project_root_match = vec![];
+    let mut list_source_dir_match = vec![];
     let mut source_may_offer_multiple_versions_match = vec![];
     let mut get_project_match = vec![];
     let mut read_source_match = vec![];
@@ -214,6 +221,7 @@ pub fn project_read_derive(input: TokenStream) -> TokenStream {
         read_source_match_part,
         sources_match_part,
         project_root_match_part,
+        list_source_dir_match_part,
         source_may_offer_multiple_versions_match_part,
         format_match_part,
         manifest_document_match_part,
@@ -231,6 +239,7 @@ pub fn project_read_derive(input: TokenStream) -> TokenStream {
         source_reader_match.push(source_reader_match_part);
         source_reader_args.push(source_reader_args_part);
         project_root_match.push(project_root_match_part);
+        list_source_dir_match.push(list_source_dir_match_part);
         source_may_offer_multiple_versions_match
             .push(source_may_offer_multiple_versions_match_part);
         get_project_match.push(get_project_match_part);
@@ -312,6 +321,18 @@ pub fn project_read_derive(input: TokenStream) -> TokenStream {
             fn project_root(&self) -> ::std::option::Option<&::camino::Utf8Path> {
                 match self {
                     #( #project_root_match ),*
+                }
+            }
+
+            fn list_source_dir(
+                &self,
+                dir: &Utf8UnixPath,
+            ) -> ::std::result::Result<
+                ::std::option::Option<::std::vec::Vec<::sysand_core::manifest::common::SourceDirEntry>>,
+                Self::Error,
+            > {
+                match self {
+                    #( #list_source_dir_match ),*
                 }
             }
 
