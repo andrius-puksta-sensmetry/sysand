@@ -419,7 +419,7 @@ fn workspace_build() -> Result<(), Box<dyn std::error::Error>> {
 
     for member in &members {
         let name = member.file_name().unwrap();
-        let kpar_path = cwd.join("output").join(format!("{name}-1.2.3.kpar"));
+        let kpar_path = cwd.join("output").join(format!("acme_{name}_1.2.3.kpar"));
         assert!(kpar_path.is_file(), "kpar file does not exist: {kpar_path}");
 
         let out = run_sysand_in(&cwd, ["info", "--kpar-path", kpar_path.as_str()], None)?;
@@ -470,7 +470,7 @@ fn workspace_build_with_inherited_metamodel() -> Result<(), Box<dyn std::error::
 
     run_sysand_in(&cwd, ["build"], None)?.assert().success();
 
-    let kpar_path = cwd.join("output").join("project1-1.0.0.kpar");
+    let kpar_path = cwd.join("output").join("acme_project1_1.0.0.kpar");
     assert!(kpar_path.is_file(), "kpar file does not exist: {kpar_path}");
 
     let kpar_project = LocalKParProjectRaw::new_guess_root(kpar_path)?;
@@ -510,7 +510,7 @@ fn a_member_that_does_not_inherit_declares_its_own() -> Result<(), Box<dyn std::
     run_sysand_in(&cwd, ["build"], None)?.assert().success();
 
     let kpar_project =
-        LocalKParProjectRaw::new_guess_root(cwd.join("output").join("project1-1.0.0.kpar"))?;
+        LocalKParProjectRaw::new_guess_root(cwd.join("output").join("acme_project1_1.0.0.kpar"))?;
     let (Some(_), Some(meta)) = kpar_project
         .get_project()?
         .and_then(sysand_core::project::ProjectDefinition::into_json)
@@ -581,7 +581,7 @@ fn a_member_declares_its_own_metamodel() -> Result<(), Box<dyn std::error::Error
     run_sysand_in(&cwd, ["build"], None)?.assert().success();
 
     let kpar_project =
-        LocalKParProjectRaw::new_guess_root(cwd.join("output").join("project1-1.0.0.kpar"))?;
+        LocalKParProjectRaw::new_guess_root(cwd.join("output").join("acme_project1_1.0.0.kpar"))?;
     let (Some(_), Some(meta)) = kpar_project
         .get_project()?
         .and_then(sysand_core::project::ProjectDefinition::into_json)
@@ -675,7 +675,7 @@ fn workspace_build_with_readme() -> Result<(), Box<dyn std::error::Error>> {
     {
         let kpar_path = cwd
             .join("output")
-            .join(format!("{project_name}-1.2.3.kpar"));
+            .join(format!("acme_{project_name}_1.2.3.kpar"));
         assert!(kpar_path.is_file(), "kpar file does not exist: {kpar_path}");
 
         assert_kpar_file(&kpar_path, "README.md", expected_readme);
@@ -759,7 +759,7 @@ fn workspace_build_with_changelog() -> Result<(), Box<dyn std::error::Error>> {
     ] {
         let kpar_path = cwd
             .join("output")
-            .join(format!("{project_name}-1.2.3.kpar"));
+            .join(format!("acme_{project_name}_1.2.3.kpar"));
         assert!(kpar_path.is_file(), "kpar file does not exist: {kpar_path}");
 
         assert_kpar_file(&kpar_path, "CHANGELOG.md", expected_changelog);
@@ -1070,8 +1070,8 @@ fn build_toml_project() -> Result<(), Box<dyn std::error::Error>> {
 
     run_sysand_in(&cwd, ["build"], None)?.assert().success();
     assert!(
-        cwd.join("output/widgets-1.0.0.kpar").exists(),
-        "the archive is named `<name>-<version>.kpar`: {:?}",
+        cwd.join("output/acme_widgets_1.0.0.kpar").exists(),
+        "the archive is named `<publisher>_<name>_<version>.kpar`: {:?}",
         std::fs::read_dir(cwd.join("output"))?
             .map(|e| e.map(|e| e.file_name()))
             .collect::<Result<Vec<_>, _>>()?
@@ -1100,7 +1100,7 @@ fn build_toml_project_with_a_dir_usage() -> Result<(), Box<dyn std::error::Error
     write_json_project(&cwd.join("dep"), "acme", "dep", "1.2.3", None)?;
 
     run_sysand_in(&cwd, ["build"], None)?.assert().success();
-    assert!(cwd.join("output/widgets-1.0.0.kpar").exists());
+    assert!(cwd.join("output/acme_widgets_1.0.0.kpar").exists());
     Ok(())
 }
 
@@ -1151,7 +1151,7 @@ fn build_toml_project_with_a_stdlib_usage() -> Result<(), Box<dyn std::error::Er
 
     run_sysand_in(&cwd, ["build"], None)?.assert().success();
 
-    let archive = std::fs::File::open(cwd.join("output/widgets-1.0.0.kpar"))?;
+    let archive = std::fs::File::open(cwd.join("output/acme_widgets_1.0.0.kpar"))?;
     let mut zip = zip::ZipArchive::new(archive)?;
     let mut info = String::new();
     std::io::Read::read_to_string(&mut zip.by_name(".project.json")?, &mut info)?;
@@ -1198,7 +1198,7 @@ fn workspace_build_follows_members_order() -> Result<(), Box<dyn std::error::Err
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     let at = |name: &str| {
         stderr
-            .find(&format!("{name}-1.0.0.kpar"))
+            .find(&format!("acme_{name}_1.0.0.kpar"))
             .unwrap_or_else(|| panic!("`{name}` was not built:\n{stderr}"))
     };
     assert!(
@@ -1250,7 +1250,7 @@ fn workspace_build_reports_every_failure() -> Result<(), Box<dyn std::error::Err
             "2 of 3 workspace members failed to build",
         ));
     assert!(
-        cwd.join("output/gamma-1.0.0.kpar").exists(),
+        cwd.join("output/acme_gamma_1.0.0.kpar").exists(),
         "an independent member is still built"
     );
     Ok(())
@@ -1279,7 +1279,7 @@ fn workspace_build_builds_a_dependent_of_a_failed_member() -> Result<(), Box<dyn
             "1 of 2 workspace members failed to build",
         ));
     assert!(
-        cwd.join("output/beta-1.0.0.kpar").exists(),
+        cwd.join("output/acme_beta_1.0.0.kpar").exists(),
         "the dependent is built"
     );
     Ok(())
@@ -1326,7 +1326,7 @@ fn build_without_a_lockfile_proceeds() -> Result<(), Box<dyn std::error::Error>>
     write_toml_member(&cwd, "widgets", "1.0.0", "")?;
 
     run_sysand_in(&cwd, ["build"], None)?.assert().success();
-    assert!(cwd.join("output/widgets-1.0.0.kpar").is_file());
+    assert!(cwd.join("output/acme_widgets_1.0.0.kpar").is_file());
     Ok(())
 }
 
@@ -1612,7 +1612,7 @@ fn a_syside_member_fails_alone_in_a_mixed_family_workspace()
         ));
 
     let omg =
-        LocalKParProjectRaw::new_guess_root(cwd.join("output").join("omg_member-1.0.0.kpar"))?;
+        LocalKParProjectRaw::new_guess_root(cwd.join("output").join("acme_omg-member_1.0.0.kpar"))?;
     let (Some(_), Some(meta)) = omg
         .get_project()?
         .and_then(sysand_core::project::ProjectDefinition::into_json)
@@ -1621,7 +1621,11 @@ fn a_syside_member_fails_alone_in_a_mixed_family_workspace()
         panic!("omg meta");
     };
     assert!(meta.index.is_some() && meta.root.is_none());
-    assert!(!cwd.join("output").join("syside_member-1.0.0.kpar").exists());
+    assert!(
+        !cwd.join("output")
+            .join("acme_syside-member_1.0.0.kpar")
+            .exists()
+    );
     Ok(())
 }
 

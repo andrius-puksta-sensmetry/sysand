@@ -1514,7 +1514,7 @@ fn include_std_resolves_the_library_at_its_iri() -> Result<(), Box<dyn std::erro
         &config,
         format!(
             "[[project]]\nidentifiers = [\"{IRI}\"]\n\
-             sources = [{{ kpar_path = \"lib/output/Kernel_Semantic_Library-1.0.0.kpar\" }}]\n"
+             sources = [{{ kpar_path = \"lib/output/omg_kernel-semantic-library_1.0.0.kpar\" }}]\n"
         ),
     )?;
 

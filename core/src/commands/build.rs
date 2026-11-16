@@ -21,7 +21,7 @@ use crate::{
     },
     model::{
         InterchangeProjectChecksumRaw, InterchangeProjectMetadataRaw, InterchangeProjectUsageRaw,
-        InterchangeProjectValidationError, KerMlChecksumAlg,
+        InterchangeProjectValidationError, KerMlChecksumAlg, ProjectName, ProjectPublisher,
     },
     project::{
         ProjectDefinition, ProjectOrIOError, ProjectRead,
@@ -276,16 +276,41 @@ pub fn default_kpar_path_of(
     output_path_in(workspace_root, project_path, &kpar_file_name_of(definition))
 }
 
+/// `<publisher>_<name>_<version>.kpar`, or `<name>_<version>.kpar` for a
+/// project with no publisher.
+///
+/// The publisher and name are normalized, and `_` occurs in no normalized
+/// publisher or name and no semantic version, so distinct projects get
+/// distinct names. A part that is invalid, which the build refuses, has
+/// every character other than an alphanumeric, `-` or `.` replaced by `-`,
+/// so the name still is a single file name.
 fn kpar_file_name_of(definition: &ProjectDefinition) -> String {
-    format!(
-        "{}-{}.kpar",
-        definition
-            .name()
-            .chars()
-            .map(|c| if c.is_alphanumeric() { c } else { '_' })
-            .collect::<String>(),
-        definition.version()
-    )
+    let sanitized = |raw: &str| -> String {
+        raw.chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '.' {
+                    c
+                } else {
+                    '-'
+                }
+            })
+            .collect()
+    };
+    let name = ProjectName::parse(definition.name().to_owned())
+        .map_or_else(|(raw, _)| sanitized(&raw), ProjectName::into_normalized);
+    let version = definition.version();
+    let version = semver::Version::parse(&version)
+        .map_or_else(|_| sanitized(&version), |version| version.to_string());
+    match definition.publisher() {
+        Some(publisher) => {
+            let publisher = ProjectPublisher::parse(publisher.to_owned()).map_or_else(
+                |(raw, _)| sanitized(&raw),
+                ProjectPublisher::into_normalized,
+            );
+            format!("{publisher}_{name}_{version}.kpar")
+        }
+        None => format!("{name}_{version}.kpar"),
+    }
 }
 
 /// `update_index` controls whether to parse symbols from current
@@ -856,7 +881,7 @@ fn read_members(workspace: &model_toml::Workspace) -> Vec<Member> {
 }
 
 /// The members in dependency order, each with the archive `sysand build`
-/// writes for it, `<root>/output/<name>-<version>.kpar`.
+/// writes for it, `<root>/output/<publisher>_<name>_<version>.kpar`.
 ///
 pub fn workspace_publish_order(
     workspace: &model_toml::Workspace,

@@ -232,9 +232,11 @@ pub enum Command {
         /// workspace, it is a path to the folder to write the KPARs to
         /// (default: `<current-workspace>/output`). When building a single
         /// project, it is a path to the KPAR file to write (default
-        /// `<current-workspace>/output/<project name>-<version>.kpar` or
-        /// `<current-project>/output/<project name>-<version>.kpar` depending
-        /// on whether the current project belongs to a workspace or not).
+        /// `<current-workspace>/output/<publisher>_<name>_<version>.kpar` or
+        /// `<current-project>/output/<publisher>_<name>_<version>.kpar`
+        /// depending on whether the current project belongs to a workspace or
+        /// not; publisher and name normalized, and `<publisher>_` left out
+        /// for a project without one).
         #[clap(verbatim_doc_comment)]
         path: Option<Utf8PathBuf>,
         /// Method to compress the files in the KPAR

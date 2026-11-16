@@ -867,8 +867,8 @@ fn build_workspace_from_a_member_dir_builds_all() -> Result<(), Box<dyn std::err
         .success();
 
     // One `output/`, at the root, holding both.
-    assert!(dir.path().join("output/alpha-1.0.0.kpar").exists());
-    assert!(dir.path().join("output/gamma-1.0.0.kpar").exists());
+    assert!(dir.path().join("output/acme_alpha_1.0.0.kpar").exists());
+    assert!(dir.path().join("output/acme_gamma_1.0.0.kpar").exists());
     Ok(())
 }
 
@@ -881,8 +881,8 @@ fn build_member_from_the_root_builds_one() -> Result<(), Box<dyn std::error::Err
         .assert()
         .success();
 
-    assert!(dir.path().join("output/gamma-1.0.0.kpar").exists());
-    assert!(!dir.path().join("output/alpha-1.0.0.kpar").exists());
+    assert!(dir.path().join("output/acme_gamma_1.0.0.kpar").exists());
+    assert!(!dir.path().join("output/acme_alpha_1.0.0.kpar").exists());
     Ok(())
 }
 
@@ -895,8 +895,8 @@ fn a_member_selector_matches_a_name_too() -> Result<(), Box<dyn std::error::Erro
         .assert()
         .success();
 
-    assert!(dir.path().join("output/gamma-1.0.0.kpar").exists());
-    assert!(!dir.path().join("output/alpha-1.0.0.kpar").exists());
+    assert!(dir.path().join("output/acme_gamma_1.0.0.kpar").exists());
+    assert!(!dir.path().join("output/acme_alpha_1.0.0.kpar").exists());
     Ok(())
 }
 
@@ -1604,7 +1604,10 @@ fn build_from_a_member_dir_builds_one_into_the_root() -> Result<(), Box<dyn std:
         })
         .collect();
     assert_eq!(built.len(), 1, "exactly one member is built: {built:?}");
-    assert!(built[0].starts_with("app-"), "and it is `app`: {built:?}");
+    assert!(
+        built[0].starts_with("acme_app_"),
+        "and it is `app`: {built:?}"
+    );
     assert!(
         !dir.path().join("app/output").exists(),
         "the KPAR lands in the root `output`, not the member's"

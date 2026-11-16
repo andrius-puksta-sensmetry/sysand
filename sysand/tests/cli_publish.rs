@@ -164,7 +164,7 @@ fn publish_workspace_with_an_unbuilt_member_uploads_nothing() -> TestResult {
     )?
     .assert()
     .failure()
-    .stderr(predicate::str::contains("project1-1.0.0.kpar"));
+    .stderr(predicate::str::contains("example-pub1_project1_1.0.0.kpar"));
     upload_mock.assert();
 
     Ok(())
@@ -1221,7 +1221,10 @@ fn publish_workspace_with_a_malformed_archive_uploads_nothing() -> TestResult {
     workspace_member(&cwd, "beta", &["../alpha"])?;
     run_sysand_ok(&cwd, &["build"], None)?;
     // `beta` comes second in dependency order.
-    fs::write(cwd.join("output/beta-1.0.0.kpar"), b"not a zip\n")?;
+    fs::write(
+        cwd.join("output/example-pub1_beta_1.0.0.kpar"),
+        b"not a zip\n",
+    )?;
 
     let mut server = Server::new();
     // The config mock matters: without it the command fails at

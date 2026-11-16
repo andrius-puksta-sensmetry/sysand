@@ -1060,9 +1060,9 @@ fn publish_order_is_the_dependency_order() -> Result<(), Box<dyn std::error::Err
     assert_eq!(
         order,
         vec![
-            ("alpha".into(), root.join("output/alpha-1.0.0.kpar")),
-            ("beta".into(), root.join("output/beta-1.0.0.kpar")),
-            ("gamma".into(), root.join("output/gamma-1.0.0.kpar")),
+            ("alpha".into(), root.join("output/acme_alpha_1.0.0.kpar")),
+            ("beta".into(), root.join("output/acme_beta_1.0.0.kpar")),
+            ("gamma".into(), root.join("output/acme_gamma_1.0.0.kpar")),
         ],
         "the full archive path matters: a member-directory `output/` is also under the root"
     );

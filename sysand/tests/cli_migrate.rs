@@ -1180,7 +1180,7 @@ fn the_test_lib_fixture_migrates_then_locks_syncs_and_builds()
     // `Lib test` is the one name in the flow that normalizes, and it
     // normalizes only for the archive.
     assert!(
-        cwd.join("output/Lib_test-0.0.1.kpar").is_file(),
+        cwd.join("output/acme_lib-test_0.0.1.kpar").is_file(),
         "{:?}",
         std::fs::read_dir(cwd.join("output"))?.collect::<Vec<_>>()
     );
