@@ -23,7 +23,7 @@
 use fluent_uri::Iri;
 use serde::Serialize as _;
 use thiserror::Error;
-use toml_edit::{ArrayOfTables, Decor, Item, Table, value};
+use toml_edit::{ArrayOfTables, Decor, Item, Table, TableLike, value};
 
 /// The document type every writer works on, and the two value types a
 /// caller needs to build one.
@@ -772,7 +772,7 @@ fn entries(array: &Array) -> Vec<Utf8UnixPathBuf> {
 /// `Array::push` gives the new entry no decor at all, so on a multi-line
 /// array it lands on the previous entry's line. Empty, single-line and
 /// multi-line arrays are told apart.
-fn push_entry(array: &mut Array, text: &str) {
+fn push_entry(array: &mut Array, entry: impl Into<Value>) {
     let multi_line = array
         .iter()
         .filter_map(|item| item.decor().prefix().and_then(|prefix| prefix.as_str()))
@@ -784,12 +784,12 @@ fn push_entry(array: &mut Array, text: &str) {
             .any(|suffix| suffix.contains('\n'));
 
     if array.is_empty() {
-        array.push(text);
+        array.push(entry);
         set_prefix(array, 0, "");
         return;
     }
     if !multi_line {
-        array.push(text);
+        array.push(entry);
         set_prefix(array, array.len() - 1, " ");
         return;
     }
@@ -821,7 +821,7 @@ fn push_entry(array: &mut Array, text: &str) {
     };
     let indent = indent_of(array);
 
-    array.push(text);
+    array.push(entry);
     set_prefix(array, array.len() - 1, &format!("{head}\n{indent}"));
     array.set_trailing(format!("\n{tail}"));
     array.set_trailing_comma(true);
@@ -895,39 +895,46 @@ fn set_prefix(array: &mut Array, at: usize, prefix: &str) {
     }
 }
 
-/// Append one `[[inline-usages]]` entry.
+/// Append one usage entry.
 ///
 /// Duplicates are compared after normalization, so an entry naming the
 /// same project under a different spelling is refused.
 ///
-/// The entry lands after the last one and before whatever trails the
-/// file, which `toml_edit` keeps where it is.
+/// Usages written as `[[inline-usages]]` tables get one more table, after
+/// the last one and before whatever trails the file, which `toml_edit`
+/// keeps where it is. Usages written as an inline
+/// `inline-usages = [{ .. }]` array get an inline table appended, in the
+/// array's shape. A manifest with no usages gets the table form.
 pub fn push_usage(doc: &mut DocumentMut, usage: &MemberUsage) -> Result<(), EditError> {
     let wanted = usage.identity();
     if find_usage(doc, &wanted).is_some() {
         return Err(EditError::DuplicateUsage(wanted));
     }
     let entry = usage_table(UsageRaw::from(usage.clone()));
-    if let Some(usages) = doc.get_mut(USAGES).and_then(Item::as_array_of_tables_mut) {
-        usages.push(entry);
-    } else {
-        let mut usages = ArrayOfTables::new();
-        usages.push(entry);
-        doc[USAGES] = Item::ArrayOfTables(usages);
+    match usages_mut(doc) {
+        Some(UsagesMut::Tables(usages)) => usages.push(entry),
+        Some(UsagesMut::Inline(usages)) => push_entry(usages, entry.into_inline_table()),
+        None => {
+            let mut usages = ArrayOfTables::new();
+            usages.push(entry);
+            doc[USAGES] = Item::ArrayOfTables(usages);
+        }
     }
     Ok(())
 }
 
 /// Remove the entry that declares a project.
 ///
-/// The comment introducing an entry is that table's own prefix and goes
-/// with it.
+/// The comment introducing a `[[inline-usages]]` entry is that table's
+/// own prefix and goes with it.
 pub fn remove_usage(doc: &mut DocumentMut, wanted: &NormalizedIdentity) -> Result<(), EditError> {
     let at = find_usage(doc, wanted).ok_or_else(|| EditError::UsageNotFound(wanted.clone()))?;
-    doc.get_mut(USAGES)
-        .and_then(Item::as_array_of_tables_mut)
-        .expect("the entry was just found")
-        .remove(at);
+    match usages_mut(doc).expect("the entry was just found") {
+        UsagesMut::Tables(usages) => {
+            usages.remove(at);
+        }
+        UsagesMut::Inline(usages) => remove_entry(usages, at),
+    }
     Ok(())
 }
 
@@ -937,7 +944,7 @@ pub fn remove_usage(doc: &mut DocumentMut, wanted: &NormalizedIdentity) -> Resul
 /// `kpar-url` or opt-in usage. `None` is no entry at all.
 pub fn usage_constraint(doc: &DocumentMut, wanted: &NormalizedIdentity) -> Option<Option<String>> {
     let at = find_usage(doc, wanted)?;
-    let entry = doc.get(USAGES)?.as_array_of_tables()?.get(at)?;
+    let entry = usage_entries(doc).get(at).copied().flatten()?;
     Some(
         entry
             .get("version")
@@ -957,21 +964,31 @@ pub fn set_usage_version(
     constraint: &semver::VersionReq,
 ) -> Result<(), EditError> {
     let at = find_usage(doc, wanted).ok_or_else(|| EditError::UsageNotFound(wanted.clone()))?;
-    let entry = doc
-        .get_mut(USAGES)
-        .and_then(Item::as_array_of_tables_mut)
-        .and_then(|usages| usages.get_mut(at))
-        .expect("the entry was just found");
-
-    if ["dir", "kpar-path", "kpar-url", "git", MARKER]
-        .iter()
-        .any(|key| entry.contains_key(key))
-    {
-        return Err(EditError::NotAnIndexUsage(wanted.clone()));
+    let is_index = |entry: &dyn TableLike| {
+        !["dir", "kpar-path", "kpar-url", "git", MARKER]
+            .iter()
+            .any(|key| entry.contains_key(key))
+    };
+    let constraint = Value::from(constraint.to_string());
+    match usages_mut(doc).expect("the entry was just found") {
+        UsagesMut::Tables(usages) => {
+            let entry = usages.get_mut(at).expect("the entry was just found");
+            if !is_index(entry) {
+                return Err(EditError::NotAnIndexUsage(wanted.clone()));
+            }
+            KeyComments::read(entry, "version").onto_value(entry, "version", constraint);
+        }
+        UsagesMut::Inline(usages) => {
+            let entry = usages
+                .get_mut(at)
+                .and_then(Value::as_inline_table_mut)
+                .expect("the entry was just found");
+            if !is_index(entry) {
+                return Err(EditError::NotAnIndexUsage(wanted.clone()));
+            }
+            entry.insert("version", constraint);
+        }
     }
-
-    let comments = KeyComments::read(entry, "version");
-    comments.onto_value(entry, "version", Value::from(constraint.to_string()));
     Ok(())
 }
 
@@ -1006,16 +1023,46 @@ pub fn push_member(doc: &mut DocumentMut, path: &str) -> Result<(), EditError> {
 /// The top-level array a project's usages are written in.
 const USAGES: &str = "inline-usages";
 
+/// The usage array, in either of the forms it is written in:
+/// `[[inline-usages]]` tables or an inline `inline-usages = [{ .. }]`.
+enum UsagesMut<'a> {
+    Tables(&'a mut ArrayOfTables),
+    Inline(&'a mut Array),
+}
+
+fn usages_mut(doc: &mut DocumentMut) -> Option<UsagesMut<'_>> {
+    match doc.get_mut(USAGES)? {
+        Item::ArrayOfTables(usages) => Some(UsagesMut::Tables(usages)),
+        Item::Value(Value::Array(usages)) => Some(UsagesMut::Inline(usages)),
+        _ => None,
+    }
+}
+
+/// The entries of the usage array, in either form, by position. An
+/// element of an inline array that is not an inline table is `None`.
+fn usage_entries(doc: &DocumentMut) -> Vec<Option<&dyn TableLike>> {
+    match doc.get(USAGES) {
+        Some(Item::ArrayOfTables(usages)) => usages
+            .iter()
+            .map(|entry| Some(entry as &dyn TableLike))
+            .collect(),
+        Some(Item::Value(Value::Array(usages))) => usages
+            .iter()
+            .map(|entry| entry.as_inline_table().map(|entry| entry as &dyn TableLike))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// Where the entry declaring `wanted` is, if it is there.
 ///
 /// An entry whose `publisher` or `name` is absent, of the wrong type, or
 /// not a valid identifier yields nothing: it is neither matched nor in the
 /// way of the entry that is.
 fn find_usage(doc: &DocumentMut, wanted: &NormalizedIdentity) -> Option<usize> {
-    doc.get(USAGES)
-        .and_then(Item::as_array_of_tables)?
-        .iter()
-        .position(|entry| entry_identity(entry).as_ref() == Some(wanted))
+    usage_entries(doc)
+        .into_iter()
+        .position(|entry| entry.and_then(entry_identity).as_ref() == Some(wanted))
 }
 
 /// A standard-library entry declares no `publisher` and resolves under
@@ -1025,7 +1072,7 @@ fn find_usage(doc: &DocumentMut, wanted: &NormalizedIdentity) -> Option<usize> {
 /// and an opt-in to a group entry that is one, which carries a
 /// `workspace` marker and a `name`. The marker's value is not read here:
 /// an entry whose marker is invalid still declares that project.
-fn entry_identity(entry: &Table) -> Option<NormalizedIdentity> {
+fn entry_identity(entry: &dyn TableLike) -> Option<NormalizedIdentity> {
     let field = |key| entry.get(key).and_then(Item::as_str);
     let name = IndexName::parse(field("name")?).ok()?;
     let publisher = match field("publisher") {

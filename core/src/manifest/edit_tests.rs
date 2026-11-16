@@ -1262,6 +1262,84 @@ fn setting_the_version_of_an_inherited_usage_is_refused() {
     );
 }
 
+const WITH_INLINE_USAGES: &str = r#"manifest-version = "1.0"
+inline-usages = [
+    { publisher = "acme", name = "dep", version = "^1" },  # pinned for now
+    { publisher = "acme", name = "local", dir = "../local" },
+]
+
+[project]
+publisher = "acme"
+name = "widgets"
+version = "1.0.0"
+sources = []
+"#;
+
+#[test]
+fn pushing_a_usage_onto_an_inline_array_appends_an_inline_table() {
+    let mut doc = opened(WITH_INLINE_USAGES);
+    push_usage(&mut doc, &declared("extra", "^3")).expect("a new usage");
+
+    let text = doc.to_string();
+    assert_eq!(
+        text,
+        WITH_INLINE_USAGES.replace(
+            "    { publisher = \"acme\", name = \"local\", dir = \"../local\" },\n",
+            "    { publisher = \"acme\", name = \"local\", dir = \"../local\" },\n    \
+             { publisher = \"acme\", name = \"extra\", version = \"^3\" },\n",
+        )
+    );
+    assert_eq!(read_back(&text).inline_usages.len(), 3);
+}
+
+#[test]
+fn pushing_a_usage_declared_in_an_inline_array_is_refused() {
+    let mut doc = opened(WITH_INLINE_USAGES);
+
+    assert_eq!(
+        push_usage(&mut doc, &declared("dep", "^2")),
+        Err(EditError::DuplicateUsage(identity("acme", "dep")))
+    );
+}
+
+#[test]
+fn removing_a_usage_from_an_inline_array_keeps_the_others() {
+    let mut doc = opened(WITH_INLINE_USAGES);
+    remove_usage(&mut doc, &identity("acme", "dep")).expect("a declared usage");
+
+    assert_eq!(
+        doc.to_string(),
+        WITH_INLINE_USAGES.replace(
+            "    { publisher = \"acme\", name = \"dep\", version = \"^1\" },  # pinned for now\n",
+            "",
+        )
+    );
+}
+
+#[test]
+fn setting_the_version_of_a_usage_in_an_inline_array_keeps_the_rest() {
+    let mut doc = opened(WITH_INLINE_USAGES);
+    set_usage_version(
+        &mut doc,
+        &identity("acme", "dep"),
+        &VersionReq::parse("^2").expect("a constraint"),
+    )
+    .expect("an index usage");
+
+    assert_eq!(
+        doc.to_string(),
+        WITH_INLINE_USAGES.replace("version = \"^1\"", "version = \"^2\"")
+    );
+    assert_eq!(
+        set_usage_version(
+            &mut doc,
+            &identity("acme", "local"),
+            &VersionReq::parse("^2").expect("a constraint")
+        ),
+        Err(EditError::NotAnIndexUsage(identity("acme", "local")))
+    );
+}
+
 #[test]
 fn pushing_a_member_appends_it_to_members_normalized() {
     let workspace =
