@@ -539,7 +539,7 @@ fn root_is_never_a_wildcard() {
 /// the directories are the ones those paths imply.
 fn lister(
     files: &'static [&'static str],
-) -> impl FnMut(&Utf8UnixPath) -> Result<Option<Vec<SourceDirEntry>>, std::convert::Infallible> {
+) -> impl FnMut(&Utf8UnixPath) -> Result<Option<Vec<SourceDirEntry>>, !> {
     move |dir| {
         let mut listed: Vec<SourceDirEntry> = Vec::new();
         for file in files {
@@ -563,10 +563,7 @@ fn lister(
     }
 }
 
-fn expand(
-    entries: &[&str],
-    files: &'static [&'static str],
-) -> Result<Vec<String>, ExpandError<std::convert::Infallible>> {
+fn expand(entries: &[&str], files: &'static [&'static str]) -> Result<Vec<String>, ExpandError<!>> {
     Ok(sources(entries)
         .expect("valid entries")
         .expand(lister(files))?
@@ -617,13 +614,13 @@ fn expansion_keeps_entry_order_and_sorts_matches() {
 fn expansion_lists_only_for_wildcard_entries() {
     let entries = sources(&["a.kerml", "lib/b.kerml"]).expect("valid");
     let expanded = entries
-        .expand(|_| -> Result<_, std::convert::Infallible> { Ok(None) })
+        .expand(|_| -> Result<_, !> { Ok(None) })
         .expect("nothing to list");
     assert_eq!(expanded, entries.as_slice());
 
     let wildcard = sources(&["*.kerml"]).expect("valid");
     let error = wildcard
-        .expand(|_| -> Result<_, std::convert::Infallible> { Ok(None) })
+        .expand(|_| -> Result<_, !> { Ok(None) })
         .expect_err("cannot be listed");
     assert_matches!(
         error,

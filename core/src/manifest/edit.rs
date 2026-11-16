@@ -886,13 +886,13 @@ fn remove_entry(array: &mut Array, at: usize) {
         let successor = prefix_of(array, at + 1);
         let tail = successor
             .split_once('\n')
-            .map_or(String::new(), |(_, tail)| tail.to_owned());
+            .map_or_default(|(_, tail)| tail.to_owned());
         array.remove(at);
         set_prefix(array, at, &format!("{head}{tail}"));
     } else {
         let tail = trailing(array)
             .split_once('\n')
-            .map_or(String::new(), |(_, tail)| format!("\n{tail}"));
+            .map_or_default(|(_, tail)| format!("\n{tail}"));
         array.remove(at);
         array.set_trailing(format!("{head}{tail}").replace("\n\n", "\n"));
     }

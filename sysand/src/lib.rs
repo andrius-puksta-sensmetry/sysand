@@ -486,7 +486,7 @@ fn failure_kind(err: &anyhow::Error) -> String {
 /// `verify` and the text is the one message.
 #[derive(Debug, thiserror::Error)]
 #[error("`.sysand` does not match `sysand-lock.toml`{after}: {count} problem(s){remain}",
-    after = .repaired.map_or_else(String::new, |n| format!(" after repairing {n} project(s)")),
+    after = .repaired.map_or_default(|n| format!(" after repairing {n} project(s)")),
     remain = if .repaired.is_some() { " remain" } else { "" })]
 pub struct VerifyFailed {
     pub count: usize,

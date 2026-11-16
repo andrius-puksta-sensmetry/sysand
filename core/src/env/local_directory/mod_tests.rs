@@ -82,7 +82,7 @@ fn env_with_installed_project(
         .unwrap()
         .unwrap();
 
-    let checksum_line = recorded_checksum.map_or_else(String::new, |c| format!("{c}\n"));
+    let checksum_line = recorded_checksum.map_or_default(|c| format!("{c}\n"));
     let toml = format!(
         r#"version = "0.2"
 

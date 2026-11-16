@@ -1280,7 +1280,7 @@ fn workspace_build_follows_members_order() -> Result<(), Box<dyn std::error::Err
     ] {
         let path = cwd.join(at);
         std::fs::create_dir_all(&path)?;
-        let usage = dep.map_or_else(String::new, |d| {
+        let usage = dep.map_or_default(|d| {
             format!("\n[[inline-usages]]\npublisher = \"acme\"\nname = \"dep\"\ndir = \"{d}\"\n")
         });
         write_toml_project(
