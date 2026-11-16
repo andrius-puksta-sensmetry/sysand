@@ -781,6 +781,30 @@ fn a_urls_table_inherits_whole_or_per_key() {
     assert!(urls.documentation.is_none());
 }
 
+/// Each `urls` key whose marker no group provides is reported, not only
+/// the first.
+#[test]
+fn every_unresolved_urls_key_is_reported() {
+    let group = workspace("[workspace]\nmembers = []\n");
+    let body = format!(
+        "{RESOLVABLE}\
+         urls.website.workspace = true\n\
+         urls.documentation.workspace = true\n\
+         urls.repository.workspace = true\n"
+    );
+    let report = manifest(&body)
+        .resolve(Some(&group))
+        .expect_err("no group gives the urls");
+    let texts = texts(&report);
+    assert_eq!(texts.len(), 3, "{texts:?}");
+    for key in ["urls.website", "urls.documentation", "urls.repository"] {
+        assert!(
+            texts.iter().any(|text| text.contains(&format!("`{key}`"))),
+            "{key}: {texts:?}"
+        );
+    }
+}
+
 /// Every key that is deliberately outside inheritance says so in its own
 /// words.
 #[test]

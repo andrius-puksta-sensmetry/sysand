@@ -519,7 +519,7 @@ impl ProjectManifest {
             }
             Some(Some(value)) => Some(value),
         };
-        let urls = collect(resolve_urls(urls, workspace), &mut report);
+        let urls = resolve_urls(urls, workspace, &mut report);
 
         let mut usages = Vec::with_capacity(inline_usages.len());
         for entry in inline_usages {
@@ -685,10 +685,13 @@ fn collect<T>(result: Result<T, Diagnostic>, report: &mut Diagnostics) -> Option
     }
 }
 
+/// The resolved `urls`, or `None` with every key that does not resolve
+/// reported.
 fn resolve_urls(
     urls: Option<MetaProperty<Urls>>,
     workspace: Option<&WorkspaceTable>,
-) -> Result<ResolvedUrls, Diagnostic> {
+    report: &mut Diagnostics,
+) -> Option<ResolvedUrls> {
     let url = |get: fn(&ResolvedUrls) -> &Option<Iri<String>>| {
         move |group: &GroupProperties| {
             let urls = group.urls.as_ref()?;
@@ -696,31 +699,46 @@ fn resolve_urls(
         }
     };
     match urls {
-        None => Ok(ResolvedUrls::default()),
+        None => Some(ResolvedUrls::default()),
         // Whole-table inheritance takes the group's `urls` as it is.
-        Some(MetaProperty::Inherited(inherited)) => {
-            from_group(&inherited, "urls", workspace, |group| group.urls.clone())
+        Some(MetaProperty::Inherited(inherited)) => collect(
+            from_group(&inherited, "urls", workspace, |group| group.urls.clone()),
+            report,
+        ),
+        Some(MetaProperty::Provided(urls)) => {
+            let website = collect(
+                resolve_optional(
+                    urls.website,
+                    "urls.website",
+                    workspace,
+                    url(|urls| &urls.website),
+                ),
+                report,
+            );
+            let documentation = collect(
+                resolve_optional(
+                    urls.documentation,
+                    "urls.documentation",
+                    workspace,
+                    url(|urls| &urls.documentation),
+                ),
+                report,
+            );
+            let repository = collect(
+                resolve_optional(
+                    urls.repository,
+                    "urls.repository",
+                    workspace,
+                    url(|urls| &urls.repository),
+                ),
+                report,
+            );
+            Some(ResolvedUrls {
+                website: website?,
+                documentation: documentation?,
+                repository: repository?,
+            })
         }
-        Some(MetaProperty::Provided(urls)) => Ok(ResolvedUrls {
-            website: resolve_optional(
-                urls.website,
-                "urls.website",
-                workspace,
-                url(|urls| &urls.website),
-            )?,
-            documentation: resolve_optional(
-                urls.documentation,
-                "urls.documentation",
-                workspace,
-                url(|urls| &urls.documentation),
-            )?,
-            repository: resolve_optional(
-                urls.repository,
-                "urls.repository",
-                workspace,
-                url(|urls| &urls.repository),
-            )?,
-        }),
     }
 }
 
