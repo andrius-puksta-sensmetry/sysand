@@ -413,6 +413,34 @@ sources = [
 }
 
 #[test]
+fn add_without_locking_keeps_the_manifest_when_the_source_is_missing()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_temp_dir, cwd) = cli_init_json_project(None, "oscar", "add-missing", "1.2.3", None)?;
+    let config_path = cwd.join("sysand.toml");
+    let before = std::fs::read_to_string(cwd.join(".project.json"))?;
+
+    run_sysand_in(
+        &cwd,
+        [
+            "add",
+            "--no-lock",
+            "--iri",
+            "urn:kpar:missing",
+            "--from-path",
+            "missing",
+        ],
+        Some(config_path.as_str()),
+    )?
+    .assert()
+    .failure();
+
+    assert_eq!(std::fs::read_to_string(cwd.join(".project.json"))?, before);
+    assert!(!config_path.is_file());
+
+    Ok(())
+}
+
+#[test]
 fn add_and_remove_from_path() -> Result<(), Box<dyn std::error::Error>> {
     let (_temp_dir, cwd) = cli_init_json_project(None, "oscar", "add-and-remove", "1.2.3", None)?;
 

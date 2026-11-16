@@ -256,7 +256,7 @@ pub fn command_add<Policy: HTTPAuthentication>(
                 unreachable!("without locking, an index usage is settled from the environment")
             }
         };
-        record_override(
+        if let Err(error) = record_override(
             pending_override,
             &resolution_opts,
             &mut config,
@@ -267,7 +267,10 @@ pub fn command_add<Policy: HTTPAuthentication>(
             &runtime,
             &auth_policy,
             &project_root,
-        )?;
+        ) {
+            backup.restore(&mut ctx)?;
+            return Err(error);
+        }
         return Ok(added);
     }
 
