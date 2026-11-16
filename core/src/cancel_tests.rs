@@ -127,6 +127,22 @@ fn project_adapter_reports_cancelled() {
 }
 
 #[test]
+fn a_cached_project_reports_its_remote_s_cancellation() {
+    let token = CancellationToken::new();
+    let project = crate::project::cached::CachedProject::new(
+        crate::project::memory::InMemoryProject::new(),
+        Stalled.to_tokio_sync(runtime(), token.clone()),
+    );
+    token.cancel();
+    assert_matches!(
+        project.sources(&crate::context::ProjectContext::default()),
+        Err(crate::project::cached::CachedProjectError::Remote(
+            Cancellable::Cancelled(_)
+        ))
+    );
+}
+
+#[test]
 fn reader_adapter_returns_interrupted() {
     use std::io::Read as _;
     let token = CancellationToken::new();

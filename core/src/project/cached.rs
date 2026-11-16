@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // SPDX-FileCopyrightText: © 2025 Sysand contributors <opensource@sensmetry.com>
 
+use thiserror::Error;
+
 use crate::{
     context::ProjectContext,
     lock::Source,
-    project::{CanonicalizationError, ProjectDefinition, ProjectFormat, ProjectRead, Utf8UnixPath},
+    project::{
+        CanonicalizationError, ManifestError, ProjectDefinition, ProjectFormat, ProjectRead,
+        Utf8UnixPath,
+    },
 };
 
 /// Pair of project storages where `local` and `remote` contain the same project
@@ -24,24 +29,35 @@ impl<Local: ProjectRead, Remote: ProjectRead> CachedProject<Local, Remote> {
     }
 }
 
+/// A read of the local copy failed, or a read of the remote, which only
+/// [`ProjectRead::sources`] does.
+#[derive(Error, Debug)]
+pub enum CachedProjectError<LocalError, RemoteError> {
+    #[error(transparent)]
+    Local(LocalError),
+    #[error(transparent)]
+    Remote(RemoteError),
+}
+
 impl<Local: ProjectRead, Remote: ProjectRead> ProjectRead for CachedProject<Local, Remote> {
     /// Forwarded, not defaulted: this type wraps another project, and
     /// the default would claim json for a `model.toml` project it holds.
     fn format(&self) -> Result<ProjectFormat, Self::Error> {
-        self.local.format()
+        self.local.format().map_err(CachedProjectError::Local)
     }
 
     fn manifest_document(
         &self,
-    ) -> Result<crate::manifest::edit::DocumentMut, crate::project::ManifestError<Self::Error>>
-    {
-        self.local.manifest_document()
+    ) -> Result<crate::manifest::edit::DocumentMut, ManifestError<Self::Error>> {
+        self.local
+            .manifest_document()
+            .map_err(|error| error.map_project_read(CachedProjectError::Local))
     }
 
-    type Error = Local::Error;
+    type Error = CachedProjectError<Local::Error, Remote::Error>;
 
     fn get_project(&self) -> Result<Option<ProjectDefinition>, Self::Error> {
-        self.local.get_project()
+        self.local.get_project().map_err(CachedProjectError::Local)
     }
 
     type SourceReader<'a>
@@ -53,14 +69,13 @@ impl<Local: ProjectRead, Remote: ProjectRead> ProjectRead for CachedProject<Loca
         &self,
         path: P,
     ) -> Result<Self::SourceReader<'_>, Self::Error> {
-        self.local.read_source(path)
+        self.local
+            .read_source(path)
+            .map_err(CachedProjectError::Local)
     }
 
-    /// Assumes `remote.sources()` is infallible: the return type is the
-    /// local project's error, which cannot carry the remote's.
-    // TODO: more elegant solution
     fn sources(&self, ctx: &ProjectContext) -> Result<Vec<Source>, Self::Error> {
-        Ok(self.remote.sources(ctx).unwrap())
+        self.remote.sources(ctx).map_err(CachedProjectError::Remote)
     }
 
     fn source_may_offer_multiple_versions(&self) -> bool {
@@ -69,11 +84,11 @@ impl<Local: ProjectRead, Remote: ProjectRead> ProjectRead for CachedProject<Loca
     }
 
     fn version(&self) -> Result<Option<String>, Self::Error> {
-        self.local.version()
+        self.local.version().map_err(CachedProjectError::Local)
     }
 
     fn usage(&self) -> Result<Option<Vec<crate::model::InterchangeProjectUsageRaw>>, Self::Error> {
-        self.local.usage()
+        self.local.usage().map_err(CachedProjectError::Local)
     }
 
     fn is_definitely_invalid(&self) -> bool {
@@ -83,11 +98,15 @@ impl<Local: ProjectRead, Remote: ProjectRead> ProjectRead for CachedProject<Loca
     fn checksum_canonical_hex(&self) -> Result<Option<String>, CanonicalizationError<Self::Error>> {
         // Delegate to `local`, whose checksum matches the remote's, so a
         // leaf's own override is picked up.
-        self.local.checksum_canonical_hex()
+        self.local
+            .checksum_canonical_hex()
+            .map_err(|error| error.map_project_read(CachedProjectError::Local))
     }
 
     fn checksum_canonical_variant(&self) -> Result<super::ProjectChecksum, Self::Error> {
-        self.local.checksum_canonical_variant()
+        self.local
+            .checksum_canonical_variant()
+            .map_err(CachedProjectError::Local)
     }
 
     fn project_root(&self) -> Option<&camino::Utf8Path> {
